@@ -1,4 +1,4 @@
-# Continiual Few Shot Learning
+# AHA in PyTorch
 
 ## Requirements
 - PyTorch 1.5.1+
