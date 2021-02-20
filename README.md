@@ -3,6 +3,7 @@
 ## Requirements
 - PyTorch 1.5.1+
     - Follow instructions here to set it up locally (depends on your environment)
+- [cerenaut-pt-core](https://github.com/Cerenaut/cerenaut-pt-core) - Cerenaut's PyTorch core codebase
 
 ## Getting Started
 First, you need to setup the CLS module before using it with any of the available frameworks.

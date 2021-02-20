@@ -69,8 +69,6 @@ def main():
       for batch_idx, (data, target) in enumerate(background_loader):
         data, target = data.to(device), target.to(device)
 
-        print(data.shape)
-
         losses, _ = model(data, labels=None, mode='pretrain')
         pretrain_loss = losses['ltm']['memory']['loss'].item()
 
