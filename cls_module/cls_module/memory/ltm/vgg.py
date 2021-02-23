@@ -81,8 +81,6 @@ class VGG(MemoryInterface):
 
     preds, encoding = self.vgg.forward(x=inputs, num_step=0, training=self.training, return_features=True)
 
-    # if not a list, then don't need idx, if list, use index
-
     loss = F.cross_entropy(input=preds[self.predictor_idx], target=labels)
 
     if self.vgg.training:
