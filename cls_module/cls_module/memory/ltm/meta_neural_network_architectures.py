@@ -225,9 +225,8 @@ class MetaLinearLayer(nn.Module):
 
 
 class MetaBatchNormLayer(nn.Module):
-    def __init__(self, num_features, num_support_set_steps, num_target_set_steps,
-                 eps=1e-5, momentum=0.1, affine=True, track_running_stats=True,
-                 use_per_step_bn_statistics=False, learnable_bn_gamma=True, learnable_bn_beta=True):
+    def __init__(self, num_features, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True,
+                 learnable_bn_gamma=True, learnable_bn_beta=True):
         """
         A MetaBatchNorm layer. Applies the same functionality of a standard BatchNorm layer with the added functionality of
         being able to receive a parameter dictionary at the forward pass which allows the convolution to use external
@@ -240,30 +239,15 @@ class MetaBatchNormLayer(nn.Module):
         self.affine = affine
         self.track_running_stats = track_running_stats
         self.num_features = num_features
-        self.use_per_step_bn_statistics = use_per_step_bn_statistics
         self.learnable_gamma = learnable_bn_gamma
         self.learnable_beta = learnable_bn_beta
 
-        if use_per_step_bn_statistics:
-            self.running_mean = nn.Parameter(
-                torch.zeros(num_support_set_steps + num_target_set_steps + 1, num_features),
-                requires_grad=False)
-            self.running_var = nn.Parameter(
-                torch.ones(num_support_set_steps + num_target_set_steps + 1, num_features),
-                requires_grad=False)
-            self.bias = nn.Parameter(
-                torch.zeros(num_support_set_steps + num_target_set_steps + 1, num_features),
-                requires_grad=self.learnable_beta)
-            self.weight = nn.Parameter(
-                torch.ones(num_support_set_steps + num_target_set_steps + 1, num_features),
-                requires_grad=self.learnable_gamma)
-        else:
-            self.running_mean = nn.Parameter(torch.zeros(num_features), requires_grad=False)
-            self.running_var = nn.Parameter(torch.zeros(num_features), requires_grad=False)
-            self.bias = nn.Parameter(torch.zeros(num_features),
-                                     requires_grad=self.learnable_beta)
-            self.weight = nn.Parameter(torch.ones(num_features),
-                                       requires_grad=self.learnable_gamma)
+        self.running_mean = nn.Parameter(torch.zeros(num_features), requires_grad=False)
+        self.running_var = nn.Parameter(torch.zeros(num_features), requires_grad=False)
+        self.bias = nn.Parameter(torch.zeros(num_features),
+                                 requires_grad=self.learnable_beta)
+        self.weight = nn.Parameter(torch.ones(num_features),
+                                   requires_grad=self.learnable_gamma)
 
         self.backup_running_mean = torch.zeros(self.running_mean.shape)
         self.backup_running_var = torch.ones(self.running_var.shape)
@@ -284,19 +268,9 @@ class MetaBatchNormLayer(nn.Module):
         :return: The result of the batch norm operation.
         """
 
-        if self.use_per_step_bn_statistics:
-            running_mean = self.running_mean[num_step]
-            running_var = self.running_var[num_step]
-            weight, bias = self.weight[num_step], self.bias[num_step]
-            # print(num_step)
-        else:
-            running_mean = self.running_mean
-            running_var = self.running_var
-            weight, bias = self.weight, self.bias
-
-        if backup_running_statistics and self.use_per_step_bn_statistics:
-            self.backup_running_mean.data = copy(self.running_mean.data)
-            self.backup_running_var.data = copy(self.running_var.data)
+        running_mean = self.running_mean
+        running_var = self.running_var
+        weight, bias = self.weight, self.bias
 
         momentum = self.momentum
         # print(running_mean.shape, running_var.shape)
@@ -309,9 +283,6 @@ class MetaBatchNormLayer(nn.Module):
         """
         Resets batch statistics to their backup values which are collected after each forward pass.
         """
-        if self.use_per_step_bn_statistics:
-            self.running_mean = nn.Parameter(self.backup_running_mean, requires_grad=False)
-            self.running_var = nn.Parameter(self.backup_running_var, requires_grad=False)
 
         self.to(self.weight.device)
 
@@ -321,8 +292,7 @@ class MetaBatchNormLayer(nn.Module):
 
 
 class MetaConvNormLayerLeakyReLU(nn.Module):
-    def __init__(self, input_shape, num_filters, kernel_size, stride, padding, use_bias, per_step_bn_statistics,
-                 num_support_set_steps, num_target_set_steps,
+    def __init__(self, input_shape, num_filters, kernel_size, stride, padding, use_bias,
                  use_normalization=True, groups=1):
         """
            Initializes a BatchNorm->Conv->ReLU layer which applies those operation in that order.
@@ -341,11 +311,8 @@ class MetaConvNormLayerLeakyReLU(nn.Module):
         super(MetaConvNormLayerLeakyReLU, self).__init__()
         self.input_shape = input_shape
         self.use_normalization = use_normalization
-        self.use_per_step_bn_statistics = per_step_bn_statistics
         self.num_filters = num_filters
         self.kernel_size = kernel_size
-        self.num_support_set_steps = num_support_set_steps
-        self.num_target_set_steps = num_target_set_steps
         self.stride = stride
         self.groups = groups
         self.padding = padding
@@ -369,10 +336,7 @@ class MetaConvNormLayerLeakyReLU(nn.Module):
             out, _ = out
 
         if self.use_normalization:
-            self.norm_layer = MetaBatchNormLayer(num_features=out.shape[1], track_running_stats=True,
-                                                 use_per_step_bn_statistics=self.use_per_step_bn_statistics,
-                                                 num_support_set_steps=self.num_support_set_steps,
-                                                 num_target_set_steps=self.num_target_set_steps)
+            self.norm_layer = MetaBatchNormLayer(num_features=out.shape[1], track_running_stats=True)
             # print(out.shape)
             out = self.norm_layer.forward(out, num_step=0)
 
@@ -430,7 +394,7 @@ class MetaConvNormLayerLeakyReLU(nn.Module):
 
 class VGGActivationNormNetwork(nn.Module):
     def __init__(self, input_shape, num_output_classes, use_channel_wise_attention,
-                 num_stages, num_filters, num_support_set_steps, num_target_set_steps):
+                 num_stages, num_filters):
         """
         Builds a multilayer convolutional network. It also provides functionality for passing external parameters to be
         used at inference time. Enables inner loop optimization readily.
@@ -450,8 +414,6 @@ class VGGActivationNormNetwork(nn.Module):
         self.input_shape = input_shape
         self.use_channel_wise_attention = use_channel_wise_attention
         self.num_output_classes = num_output_classes
-        self.num_support_set_steps = num_support_set_steps
-        self.num_target_set_steps = num_target_set_steps
         self.build_network()
 
     def build_network(self):
@@ -470,9 +432,7 @@ class VGGActivationNormNetwork(nn.Module):
                                                                               kernel_size=3, stride=1,
                                                                               padding=1,
                                                                               use_bias=True,
-                                                                              groups=1, per_step_bn_statistics=True,
-                                                                              num_support_set_steps=self.num_support_set_steps,
-                                                                              num_target_set_steps=self.num_target_set_steps)
+                                                                              groups=1)
 
             out = self.layer_dict['conv_{}'.format(i)](out, training=True, num_step=0)
 
@@ -488,8 +448,12 @@ class VGGActivationNormNetwork(nn.Module):
 
                 pred = self.layer_dict['linear_{}'.format(idx)](out)
         else:
-            self.layer_dict['linear'] = MetaLinearLayer(input_shape=out.shape,
-                                                        num_filters=self.num_output_classes, use_bias=True)
+
+            raise Exception("num_output_classes must be a list for this VGG implementation "
+                            "(it is expected in other parts of the code)")
+
+            # self.layer_dict['linear'] = MetaLinearLayer(input_shape=out.shape,
+            #                                             num_filters=self.num_output_classes, use_bias=True)
 
             out = self.layer_dict['linear'](out)
         print("VGGNetwork build", out.shape)
@@ -616,8 +580,7 @@ class FCCActivationNormNetwork(nn.Module):
             self.layer_dict['fcc_{}'.format(i)] = MetaLinearLayer(input_shape=out.shape, num_filters=40, use_bias=False)
             out = self.layer_dict['fcc_{}'.format(i)].forward(out)
             if self.use_bn:
-                self.layer_dict['fcc_bn_{}'.format(i)] = MetaBatchNormLayer(num_features=out.shape[1], args=self.args,
-                                                                            use_per_step_bn_statistics=True)
+                self.layer_dict['fcc_bn_{}'.format(i)] = MetaBatchNormLayer(num_features=out.shape[1], args=self.args)
                 out = self.layer_dict['fcc_bn_{}'.format(i)].forward(out, num_step=0)
             out = F.leaky_relu(out)
 
@@ -706,13 +669,11 @@ class FCCActivationNormNetwork(nn.Module):
 
 
 class SqueezeExciteLayer(nn.ModuleDict):
-    def __init__(self, input_shape, num_filters, num_layers, num_support_set_steps, num_target_set_steps):
+    def __init__(self, input_shape, num_filters, num_layers):
         super(SqueezeExciteLayer, self).__init__()
         self.input_shape = input_shape
         self.num_filters = num_filters
         self.num_layers = num_layers
-        self.num_support_set_steps = num_support_set_steps
-        self.num_target_set_steps = num_target_set_steps
         self.build_block()
 
     def build_block(self):
@@ -778,7 +739,7 @@ class SqueezeExciteLayer(nn.ModuleDict):
 
 class VGGActivationNormNetworkWithAttention(nn.Module):
     def __init__(self, input_shape, num_output_classes, use_channel_wise_attention,
-                 num_stages, num_filters, num_support_set_steps, num_target_set_steps, num_blocks_per_stage):
+                 num_stages, num_filters, num_blocks_per_stage):
         """
         Builds a multilayer convolutional network. It also provides functionality for passing external parameters to be
         used at inference time. Enables inner loop optimization readily.
@@ -799,8 +760,6 @@ class VGGActivationNormNetworkWithAttention(nn.Module):
         self.use_channel_wise_attention = use_channel_wise_attention
         self.num_output_classes = num_output_classes
         self.num_blocks_per_stage = num_blocks_per_stage
-        self.num_support_set_steps = num_support_set_steps
-        self.num_target_set_steps = num_target_set_steps
         self.build_network()
 
     def build_network(self):
@@ -819,9 +778,7 @@ class VGGActivationNormNetworkWithAttention(nn.Module):
                 if self.use_channel_wise_attention:
                     self.layer_dict['attention_layer_{}_{}'.format(i, j)] = SqueezeExciteLayer(input_shape=out.shape,
                                                                                                num_filters=0,
-                                                                                               num_layers=0,
-                                                                                               num_support_set_steps=self.num_support_set_steps,
-                                                                                               num_target_set_steps=self.num_target_set_steps)
+                                                                                               num_layers=0)
                     out = self.layer_dict['attention_layer_{}_{}'.format(i, j)].forward(out)
 
                 self.layer_dict['conv_{}_{}'.format(i, j)] = MetaConvNormLayerLeakyReLU(input_shape=out.shape,
@@ -829,10 +786,7 @@ class VGGActivationNormNetworkWithAttention(nn.Module):
                                                                                         kernel_size=3, stride=1,
                                                                                         padding=1,
                                                                                         use_bias=True,
-                                                                                        groups=1,
-                                                                                        per_step_bn_statistics=True,
-                                                                                        num_support_set_steps=self.num_support_set_steps,
-                                                                                        num_target_set_steps=self.num_target_set_steps)
+                                                                                        groups=1)
 
                 out = self.layer_dict['conv_{}_{}'.format(i, j)](out, training=True, num_step=0)
 
@@ -841,9 +795,7 @@ class VGGActivationNormNetworkWithAttention(nn.Module):
         if self.use_channel_wise_attention:
             self.layer_dict['attention_pre_logit_layer'] = SqueezeExciteLayer(input_shape=out.shape,
                                                                               num_filters=0,
-                                                                              num_layers=0,
-                                                                              num_support_set_steps=self.num_support_set_steps,
-                                                                              num_target_set_steps=self.num_target_set_steps)
+                                                                              num_layers=0)
             out = self.layer_dict['attention_pre_logit_layer'].forward(out)
 
         features_avg = F.avg_pool2d(out, out.shape[-1]).squeeze()
@@ -946,16 +898,13 @@ class VGGActivationNormNetworkWithAttention(nn.Module):
 
 
 class MetaBatchRelationalModule(nn.Module):
-    def __init__(self, input_shape, use_coordinates=True, num_support_set_steps=0, num_target_set_steps=0,
-                 output_units=32):
+    def __init__(self, input_shape, use_coordinates=True, output_units=32):
         super(MetaBatchRelationalModule, self).__init__()
 
         self.input_shape = input_shape
         self.layer_dict = nn.ModuleDict()
         self.first_time = True
         self.use_coordinates = use_coordinates
-        self.num_target_set_steps = num_target_set_steps
-        self.num_support_set_steps = num_support_set_steps
         self.output_units = output_units
         self.build_block()
 
