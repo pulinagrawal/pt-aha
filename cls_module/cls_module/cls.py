@@ -89,13 +89,16 @@ class CLS(nn.Module):
       names = ['ltm.classifier', 'stm']
 
     if 'ltm.classifier' in names:
-      self.ltm.classifier.reset()
+      ltm = self._modules[self.ltm_key]
+      if hasattr(ltm, 'classifier'):  # if classifier is a separate module, it can be reset
+        ltm.classifier.reset()
 
     if 'stm' in names:
-      self.stm.reset()
+      stm = self._modules[self.stm_key]
+      stm.reset()
 
-      if hasattr(self.stm, 'classifier'):
-        self.stm.classifier.reset()
+      if hasattr(stm, 'classifier'):
+        stm.classifier.reset()
 
   def freeze(self, names):
     """Selectively freeze sub-modules."""

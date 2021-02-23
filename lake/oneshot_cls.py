@@ -24,9 +24,9 @@ LOG_EVERY = 20
 
 def main():
   parser = argparse.ArgumentParser(description='Complementary Learning System: One-shot Learning Experiments')
-  parser.add_argument('--config', nargs="?", type=str, default='./definitions/aha_config.json',
+  parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config.json',
                       help='Configuration file for experiments.')
-  parser.add_argument('--logging', nargs="?", type=str, default='warning',
+  parser.add_argument('-l', '--logging', nargs="?", type=str, default='warning',
                       help='Logging level.')
 
   args = parser.parse_args()
@@ -69,7 +69,7 @@ def main():
       for batch_idx, (data, target) in enumerate(background_loader):
         data, target = data.to(device), target.to(device)
 
-        losses, _ = model(data, labels=None, mode='pretrain')
+        losses, _ = model(data, labels=target, mode='pretrain')
         pretrain_loss = losses['ltm']['memory']['loss'].item()
 
         if batch_idx % LOG_EVERY == 0:
