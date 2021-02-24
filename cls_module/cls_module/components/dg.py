@@ -150,8 +150,8 @@ class DG(nn.Module):
       # Override encoding to become binary mask
       top_k_mask = utils.build_topk_mask(filtered_encoding, dim=-1, k=self.config['sparsity'])
 
-    overlap = self.compute_overlap(top_k_mask)
-    overlap_sum = overlap.sum().item()
+    # overlap = self.compute_overlap(top_k_mask)
+    # overlap_sum = overlap.sum().item()
 
     # assert overlap_sum == 0.0, 'Found overlap between samples in batch'
 
