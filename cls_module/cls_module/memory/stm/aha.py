@@ -311,8 +311,6 @@ class AHA(MemoryInterface):
     overlap = self.ps.compute_overlap(outputs['ps'])
     losses['ps_overlap'] = overlap.sum()
 
-    print('ps_overlap =', losses['ps_overlap'].item())
-
     pr_targets = outputs['ps'] if self.training else self.pc_buffer_batch
     losses['pr'], outputs['pr'] = self.forward_pr(inputs=inputs, targets=pr_targets)
 
@@ -320,8 +318,6 @@ class AHA(MemoryInterface):
     pr_out = outputs['pr']['pr_out']
     pr_batch_size = pr_out.shape[0]
     losses['pr_mismatch'] = torch.sum(torch.abs(pr_targets - pr_out)) / pr_batch_size
-
-    print('pr_mismatch =', losses['pr_mismatch'].item())
 
     pc_cue = outputs['ps'] if self.training else outputs['pr']['z_cue']
     outputs['pc'] = self.forward_pc(inputs=pc_cue)
