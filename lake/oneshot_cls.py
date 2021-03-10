@@ -17,7 +17,7 @@ from cls_module.cls import CLS
 import utils
 
 from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDataset
-from lake_oneshot_metrics import LakeOneshotMetrics
+from oneshot_metrics import OneshotMetrics
 
 LOG_EVERY = 20
 
@@ -101,7 +101,7 @@ def main():
   oneshot_dataset = enumerate(zip(study_loader, recall_loader))
 
   # Initialise metrics
-  lake_oneshot_metrics = LakeOneshotMetrics()
+  oneshot_metrics = OneshotMetrics()
 
   # Load the pretrained model
   model = CLS(image_shape, config, device=device, writer=writer).to(device)
@@ -131,38 +131,34 @@ def main():
     with torch.no_grad():
       model(recall_data, recall_target, mode='recall')
 
-      results = lake_oneshot_metrics.compute(model.features['study'], model.features['recall'],
-                                             modes=['oneshot'])
-      lake_oneshot_metrics.report(results)
+      if 'metrics' in config and config['metrics']:
+        metrics_config = config['metrics']
 
-      summary_names = [
-          'study_inputs',
-          'study_stm_pr',
-          'study_stm_pc',
+        metrics_len = [len(value) for key, value in metrics_config.items()]
+        assert all(x == metrics_len[0] for x in metrics_len), 'Mismatch in metrics config'
 
-          'recall_inputs',
-          'recall_stm_pr',
-          'recall_stm_pc',
-          'recall_stm_recon'
-      ]
+        for i in range(metrics_len[0]):
+          primary_feature = utils.find_json_value(metrics_config['primary_feature_names'][i], model.features)
+          primary_label = utils.find_json_value(metrics_config['primary_label_names'][i], model.features)
+          secondary_feature = utils.find_json_value(metrics_config['secondary_feature_names'][i], model.features)
+          secondary_label = utils.find_json_value(metrics_config['secondary_label_names'][i], model.features)
+          comparison_type = metrics_config['comparison_types'][i]
+          prefix = metrics_config['prefixes'][i]
 
-      summary_images = []
-      for name in summary_names:
-        mode_key, feature_key = name.split('_', 1)
+          oneshot_metrics.compare(prefix,
+                                  primary_feature, primary_label,
+                                  secondary_feature, secondary_label,
+                                  comparison_type=comparison_type)
 
-        summary_features = model.features[mode_key][feature_key]
-        if len(summary_features.shape) > 2:
-          summary_features = summary_features.permute(0, 2, 3, 1)
+      # PR Accuracy
+      oneshot_metrics.compare('pr',
+                              None, model.features['study']['stm_pr'],
+                              None, model.features['recall']['stm_pr'],
+                              comparison_type='accuracy')
 
-        summary_shape, _ = utils.square_image_shape_from_1d(np.prod(summary_features.data.shape[1:]))
-        summary_shape[0] = summary_features.data.shape[0]
+      oneshot_metrics.report()
 
-        summary_image = (name, summary_features, summary_shape)
-        summary_images.append(summary_image)
-
-      utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
-
-  lake_oneshot_metrics.report_averages()
+  oneshot_metrics.report_averages()
 
   writer.flush()
   writer.close()
