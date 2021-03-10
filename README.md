@@ -22,4 +22,6 @@ file located in `lake/definitions/aha_config.json` with the default configuratio
 
 Run the experiment using `python oneshot_cls.py --config path/to/config.json`
 
-
+Using the config, you can select the type of Long Term Memory (LTM), currently the choice is between a simple k-sparse autoencoder or VGG.
+The first stage in execution is to pre-train the LTM.
+If you already have a trained model (in a checkpoint file), you can specify it in the config, and then skip the pre-training.
