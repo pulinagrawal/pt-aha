@@ -14,6 +14,15 @@
   "ltm_type": "vgg",
   "stm_type": "aha",
 
+  "metrics": {
+    "prefixes": ["ps", "pc", "pr"],
+    "primary_feature_names": ["study.stm_ps", "study.stm_pc", "study.stm_pr"],
+    "primary_label_names": ["study.labels", "study.labels", "study.labels"],
+    "secondary_feature_names": ["recall.stm_ps", "recall.stm_pc", "recall.stm_pr"],
+    "secondary_label_names": ["recall.labels", "recall.labels", "recall.labels"],
+    "comparison_types": ["match_mse", "match_mse", "match_mse"]
+  },
+
   "ltm": {
     "learning_rate": 0.001,
     "weight_decay": 0.0001,
