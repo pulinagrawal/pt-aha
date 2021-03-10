@@ -4,6 +4,7 @@
   "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
 
+  "pretrained_model_path": "./runs/20210223-145831/pretrained_model_10.pt",
   "pretrain_epochs": 10,
   "pretrain_batch_size": 128,
 

@@ -20,6 +20,7 @@ from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDat
 from lake_oneshot_metrics import LakeOneshotMetrics
 
 LOG_EVERY = 20
+SAVE_EVERY = 1
 
 
 def main():
@@ -77,10 +78,10 @@ def main():
               epoch, batch_idx * len(data), len(background_loader.dataset),
               100. * batch_idx / len(background_loader), pretrain_loss))
 
-    pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
-
-    print('Saving model to:', pretrained_model_path)
-    torch.save(model.state_dict(), pretrained_model_path)
+        if batch_idx % SAVE_EVERY == 0:
+          pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
+          print('Saving model to:', pretrained_model_path)
+          torch.save(model.state_dict(), pretrained_model_path)
 
   # Study and Recall
   # ---------------------------------------------------------------------------
@@ -166,6 +167,7 @@ def main():
 
   writer.flush()
   writer.close()
+
 
 if __name__ == '__main__':
   main()
