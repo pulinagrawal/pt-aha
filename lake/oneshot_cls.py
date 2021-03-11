@@ -70,7 +70,7 @@ def main():
       for batch_idx, (data, target) in enumerate(background_loader):
         data, target = data.to(device), target.to(device)
 
-        losses, _ = model(data, labels=target, mode='pretrain')
+        losses, _ = model(data, labels=None, mode='pretrain')
         pretrain_loss = losses['ltm']['memory']['loss'].item()
 
         if batch_idx % LOG_EVERY == 0:
@@ -78,10 +78,10 @@ def main():
               epoch, batch_idx * len(data), len(background_loader.dataset),
               100. * batch_idx / len(background_loader), pretrain_loss))
 
-        if batch_idx % SAVE_EVERY == 0:
-          pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
-          print('Saving model to:', pretrained_model_path)
-          torch.save(model.state_dict(), pretrained_model_path)
+      if epoch % SAVE_EVERY == 0:
+        pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
+        print('Saving model to:', pretrained_model_path)
+        torch.save(model.state_dict(), pretrained_model_path)
 
   # Study and Recall
   # ---------------------------------------------------------------------------
