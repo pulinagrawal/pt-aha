@@ -236,6 +236,15 @@ class CLS(nn.Module):
 
     return losses, outputs
 
+  def is_ltm_supervised(self):
+    ltm_type = self.config['ltm_type']
+    if ltm_type == 'vc':
+      return False
+    elif ltm_type == 'vgg':
+      return True
+    else:
+      return False
+
   def write_loss_summary(self, writer, losses, mode, summary_step):
     for module_name in losses:
       for submodule_name in losses[module_name]:

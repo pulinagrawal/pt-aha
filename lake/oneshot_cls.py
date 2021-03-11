@@ -70,7 +70,7 @@ def main():
       for batch_idx, (data, target) in enumerate(background_loader):
         data, target = data.to(device), target.to(device)
 
-        losses, _ = model(data, labels=None, mode='pretrain')
+        losses, _ = model(data, labels=target if model.is_ltm_supervised() else None, mode='pretrain')
         pretrain_loss = losses['ltm']['memory']['loss'].item()
 
         if batch_idx % LOG_EVERY == 0:
