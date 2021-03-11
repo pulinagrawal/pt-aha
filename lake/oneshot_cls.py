@@ -159,6 +159,33 @@ def main():
 
       oneshot_metrics.report()
 
+      summary_names = [
+           'study_inputs',
+           'study_stm_pr',
+           'study_stm_pc',
+
+           'recall_inputs',
+           'recall_stm_pr',
+           'recall_stm_pc',
+           'recall_stm_recon'
+       ]
+
+       summary_images = []
+       for name in summary_names:
+         mode_key, feature_key = name.split('_', 1)
+
+         summary_features = model.features[mode_key][feature_key]
+         if len(summary_features.shape) > 2:
+           summary_features = summary_features.permute(0, 2, 3, 1)
+
+         summary_shape, _ = utils.square_image_shape_from_1d(np.prod(summary_features.data.shape[1:]))
+         summary_shape[0] = summary_features.data.shape[0]
+
+         summary_image = (name, summary_features, summary_shape)
+         summary_images.append(summary_image)
+
+       utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
+
   oneshot_metrics.report_averages()
 
   writer.flush()
