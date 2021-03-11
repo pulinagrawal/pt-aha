@@ -29,6 +29,7 @@ def find_json_value(key_path, json, delimiter='.'):
     data = data[paths[i]]
   return data
 
+
 def mse(x, y):
   return np.square(x - y).mean()
 
@@ -52,18 +53,16 @@ def compute_matrix_prep(primary_features, secondary_features):
 
 def compute_matrix(primary_features, secondary_features, comparison_type_='mse'):
   """
-  Compute a 'confusion matrix' style matrix of the mse between test and train sets - for a specified feature type
-  For feature_type='labels', compute float equivalent of True(1.0)/False(0.0) if they are the same or not.
+  Compute a 'confusion matrix' style matrix with comparison (e.g. mse)
+  between primary and secondary sets for a specified feature type.
 
-  @:param feature_type the name (key in dic train_features and test_features) of features to use
-
-                        Test Label
-  Train Label |    Label 1              Label 2              Label 3
+                        Secondary Label
+  Primary Label |    Label 1              Label 2              Label 3
   ----------------------------------------------------------------------------------
-  Label 1     |     mse(trn_1, tst_1)   mse(trn_1, tst_2)   mse(trn_1, tst_2)
-  Label 2     |     mse(trn_2, tst_1)   ...                  ...
-  Label 3     |     mse(trn_3, tst_1)   ...                  ...
-  Label 4     |     mse(trn_4, tst_1)   ...                  ...
+  Label 1       |     mse(trn_1, tst_1)   mse(trn_1, tst_2)   mse(trn_1, tst_2)
+  Label 2       |     mse(trn_2, tst_1)   ...                  ...
+  Label 3       |     mse(trn_3, tst_1)   ...                  ...
+  Label 4       |     mse(trn_4, tst_1)   ...                  ...
 
   """
   primary_ftrs, secondary_ftrs, num_labels, matrix = compute_matrix_prep(primary_features, secondary_features)
