@@ -25,4 +25,4 @@ class BetaVAE(nn.Module):
     self.output_shape = self.input_shape
 
   def forward(self, inputs):
-    pass
+    return inputs

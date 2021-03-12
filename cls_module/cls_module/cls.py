@@ -89,7 +89,7 @@ class CLS(nn.Module):
                      writer=self.writer)
 
       next_input = ec_.output_shape
-      self.add_module(self.stm_key, ec_)
+      self.add_module(self.ec_key, ec_)
 
     # 3) _________ stm ____________________________________
     stm_type = self.config['stm_type']
@@ -228,9 +228,17 @@ class CLS(nn.Module):
       accuracies[self.ltm_key] = torch.eq(softmax_preds, labels).data.cpu().float().mean()
 
     if mode in ['study', 'recall']:
-      stm_input = outputs[self.ltm_key]['memory']['output'].detach()  # Ensures no gradients pass through modules
 
-      losses[self.stm_key], outputs[self.stm_key] = self.stm(inputs=stm_input, targets=inputs, labels=labels)
+      next_input = outputs[self.ltm_key]['memory']['output'].detach()  # Ensures no gradients pass through modules
+
+      # iterate EC
+      if self.ec_key in self._modules:
+        ec = self._modules[self.ec_key]
+        outputs[self.ec_key] = self.ec(inputs=next_input)
+        next_input = outputs[self.ec_key].detach()  # Ensures no gradients pass through modules
+
+      # iterate STM
+      losses[self.stm_key], outputs[self.stm_key] = self.stm(inputs=next_input, targets=inputs, labels=labels)
 
       preds = outputs[self.stm_key]['classifier']['predictions']
 
