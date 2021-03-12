@@ -2,6 +2,7 @@
 
 import os
 import collections
+import logging
 
 import torch
 import torch.nn as nn
@@ -13,13 +14,14 @@ import numpy as np
 
 import cls_module
 from cerenaut_pt_core.utils import square_image_shape_from_1d
-from .memory import ltm, stm
+from .memory import ltm, stm, ec
 
 
 class CLS(nn.Module):
   """Complementary Learning System module."""
 
   ltm_key = 'ltm'
+  ec_key = 'ec'
   stm_key = 'stm'
 
   def __init__(self, input_shape, config, device=None, writer=None):
@@ -48,6 +50,8 @@ class CLS(nn.Module):
 
   def build(self):
     """Build and initialize the long-term and short-term memory modules."""
+
+    # 1) _________ ltm ____________________________________
     ltm_config = self.config[self.ltm_key]
     ltm_type = self.config['ltm_type']
 
@@ -64,6 +68,30 @@ class CLS(nn.Module):
                      device=self.device,
                      writer=self.writer)
 
+    next_input = ltm_.output_shape
+    self.add_module(self.ltm_key, ltm_)
+
+    # 2) _________ ec ____________________________________
+
+    ec_type = self.config.get('ec_type', 'none')
+    if ec_type != 'none':
+      ec_config = self.config[self.ec_key]
+
+      if ec_type == 'bvae':
+        ec_class = ec.BetaVAE
+        logging.info("Creating a BetaVAE Entorhinal Cortex")
+      else:
+        raise NotImplementedError('EC type not supported: ' + ec_type)
+
+      ec_ = ec_class(config=ec_config,
+                     input_shape=ltm_.output_shape,
+                     device=self.device,
+                     writer=self.writer)
+
+      next_input = ec_.output_shape
+      self.add_module(self.stm_key, ec_)
+
+    # 3) _________ stm ____________________________________
     stm_type = self.config['stm_type']
     stm_config = self.config[self.stm_key]
 
@@ -75,12 +103,11 @@ class CLS(nn.Module):
       raise NotImplementedError('STM type not supported: ' + stm_type)
 
     stm_ = stm_class(config=stm_config,
-                     input_shape=ltm_.output_shape,
+                     input_shape=next_input,
                      target_shape=self.input_shape,
                      device=self.device,
                      writer=self.writer)
 
-    self.add_module(self.ltm_key, ltm_)
     self.add_module(self.stm_key, stm_)
 
   def reset(self, names=None):
