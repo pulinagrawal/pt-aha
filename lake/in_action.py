@@ -9,6 +9,11 @@ from torchvision import datasets, transforms
 import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
+import cv2
+import base64
+import numpy as np
 
 from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDataset
 
@@ -83,31 +88,32 @@ for study in study_loader:
         break
 '''
 
+
 if __name__ == '__main__':
-    layout = [[sg.Text("Oh Lord, show me the way!")],
-              [sg.Button("OK")],
+
+    background = '#F0F0F0'
+    sg.set_options(background_color=background,
+                   element_background_color=background)
+    layout = [[sg.Text("Oh Lord, show me the way!")], [sg.Button("OK")],
               #[sg.Canvas(key="-CANVAS-")],
-              [sg.Canvas(key="input"+str(i)) for i in range(5)],
-              [sg.Canvas(key="input"+str(5+i)) for i in range(5)]
+              [sg.Button(key="input"+str(i), button_color=(background, background), border_width=0)
+                 for i in range(10)],
+              []
              ]
 
     # Create the window
-
-    def onObjectClick(event):                  
-        print('Got object click', event.x, event.y)
-        print(event.widget.find_closest(event.x, event.y))
-    
     window = sg.Window("Demo", layout, finalize=True)
-    for canvases in layout[2:]:
-        for canv in canvases:
-            canv.tk_canvas.tag_bind(canv, '<ButtonPress-1>', onObjectClick)       
 
-    x, _ = next(iter(study_loader))
     for i in range(10):
-        fig = plt.figure(figsize=(1,1))
-        plt.imshow(x[i+5].squeeze(), aspect='equal')
-        plt.axis('off') 
-        draw_figure(window['input'+str(i)].TKCanvas, fig)
+        x, _ = next(iter(study_loader))
+        array = x[i].squeeze().numpy()
+        array = np.stack((array, array, array)).transpose()
+
+        image = cv2.imencode('.png', array*255)[1]
+        image = base64.b64encode(image.tobytes()).decode('utf-8')
+        window['input'+str(i)].update(image_data=image)
+
+        #draw_figure(window['input'+str(i)].TKCanvas, fig)
 
     # Create an event loop
     while True:
