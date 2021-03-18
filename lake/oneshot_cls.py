@@ -4,6 +4,7 @@ import os
 import json
 import argparse
 import logging
+import glob
 
 import numpy as np
 
@@ -42,10 +43,6 @@ def main():
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-  summary_dir = utils.get_summary_dir()
-
-  writer = SummaryWriter(log_dir=summary_dir)
-
   image_tfms = transforms.Compose([
       transforms.ToTensor(),
       OmniglotTransformation(resize_factor=config['image_resize_factor'])
@@ -53,9 +50,59 @@ def main():
 
   image_shape = config['image_shape']
   pretrained_model_path = config.get('pretrained_model_path', None)
+  previous_run_path = config.get('previous_run_path', None)
+  train_from = config.get('train_from', None)
 
   # Pretraining
   # ---------------------------------------------------------------------------
+  start_epoch = 1
+
+  if previous_run_path:
+    summary_dir = previous_run_path
+    writer = SummaryWriter(log_dir=summary_dir)
+
+    # Ensure that pretrained model path doesn't exist so that training occurs
+    pretrained_model_path = None
+
+    if train_from == 'scratch':
+      # Clear the directory
+      for model in os.listdir(previous_run_path):
+        path = os.path.join(previous_run_path, model)
+        try:
+          os.unlink(os.path.join(path))
+        except Exception as e:
+          print(f"Failed to remove file with path {path} due to exception {e}")
+
+    elif train_from == 'latest':
+      model_path = os.path.join(previous_run_path, 'pretrained_model_*')
+      # Find the latest file in the directory
+      latest = max(glob.glob(model_path), key=os.path.getctime)
+
+      # Find the epoch that was stopped on
+      i = len(latest) - 4 # (from before the .pt)
+      latest_epoch = 0
+      while latest[i] != '_':
+        latest_epoch *= 10
+        latest_epoch += int(latest[i])
+        i -= 1
+
+      if latest_epoch < config['pretrain_epochs']:
+        start_epoch = latest_epoch + 1
+
+      model = CLS(image_shape, config, device=device, writer=writer).to(device)
+
+      print("Attempting to find existing checkpoint")
+      if os.path.exists(latest):
+        try:
+          model.load_state_dict(torch.load(latest))
+        except:
+          print(f"Failed to load model from path: {latest}. Please check path and try again.")
+          return
+
+  if not summary_dir:
+    summary_dir = utils.get_summary_dir()
+    writer = SummaryWriter(log_dir=summary_dir)
+
   if not pretrained_model_path:
     background_loader = torch.utils.data.DataLoader(
         datasets.Omniglot('./data', background=True, download=True, transform=image_tfms),
@@ -64,7 +111,7 @@ def main():
     model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
     # Pre-train the model
-    for epoch in range(1, config['pretrain_epochs'] + 1):
+    for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
       model.train()
 
       for batch_idx, (data, target) in enumerate(background_loader):
