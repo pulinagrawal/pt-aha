@@ -67,8 +67,8 @@ def main():
 
     if train_from == 'scratch':
       # Clear the directory
-      for model in os.listdir(previous_run_path):
-        path = os.path.join(previous_run_path, model)
+      for file in os.listdir(previous_run_path):
+        path = os.path.join(previous_run_path, file)
         try:
           os.unlink(os.path.join(path))
         except Exception as e:
