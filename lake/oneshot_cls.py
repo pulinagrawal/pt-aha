@@ -60,6 +60,7 @@ def main():
   if previous_run_path:
     summary_dir = previous_run_path
     writer = SummaryWriter(log_dir=summary_dir)
+    model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
     # Ensure that pretrained model path doesn't exist so that training occurs
     pretrained_model_path = None
@@ -89,8 +90,6 @@ def main():
       if latest_epoch < config['pretrain_epochs']:
         start_epoch = latest_epoch + 1
 
-      model = CLS(image_shape, config, device=device, writer=writer).to(device)
-
       print("Attempting to find existing checkpoint")
       if os.path.exists(latest):
         try:
@@ -102,13 +101,12 @@ def main():
   else:
     summary_dir = utils.get_summary_dir()
     writer = SummaryWriter(log_dir=summary_dir)
+    model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
   if not pretrained_model_path:
     background_loader = torch.utils.data.DataLoader(
         datasets.Omniglot('./data', background=True, download=True, transform=image_tfms),
         batch_size=config['pretrain_batch_size'], shuffle=True)
-
-    model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
     # Pre-train the model
     for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
