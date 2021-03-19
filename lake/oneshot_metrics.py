@@ -52,7 +52,10 @@ class OneshotMetrics:
     elif comparison_type == 'mismatch':
       self.metrics[prefix + '_' + 'mismatch'] = torch.sum(torch.abs(secondary_features - primary_features)) / primary_features.shape[0]
 
-    # TODO: cosine distance
+    # Cosine similarity between two features
+    elif comparison_type == 'cosine_similarity':
+      cos = torch.nn.CosineSimilarity(dim=1, eps=1e-08)
+      self.metrics[prefix + '_' + 'cosine_similarity'] = cos(primary_features, secondary_features)
 
   def report(self, verbose=True):
     """Format and report specified metrics, and update running averages."""
