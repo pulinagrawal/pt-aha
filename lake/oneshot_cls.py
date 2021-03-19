@@ -99,7 +99,7 @@ def main():
           print(f"Failed to load model from path: {latest}. Please check path and try again.")
           return
 
-  if not summary_dir:
+  else:
     summary_dir = utils.get_summary_dir()
     writer = SummaryWriter(log_dir=summary_dir)
 
