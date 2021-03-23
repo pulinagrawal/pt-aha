@@ -7,7 +7,6 @@
   "pretrained_model_path": "./runs/20210223-145831/pretrained_model_10.pt",
   "pretrain_epochs": 10,
   "pretrain_batch_size": 128,
-  "pretrained_model_path": "/mnt/c/Users/pulin/Projects/ProjectAGI/pt-aha/lake/runs/20210223-234348/pretrained_model_10.pt",
 
   "study_steps": 60,
   "study_batch_size": 20,
