@@ -4,6 +4,7 @@ import os
 import json
 import argparse
 import logging
+import glob
 
 import numpy as np
 
@@ -17,9 +18,10 @@ from cls_module.cls import CLS
 import utils
 
 from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDataset
-from lake_oneshot_metrics import LakeOneshotMetrics
+from oneshot_metrics import OneshotMetrics
 
 LOG_EVERY = 20
+SAVE_EVERY = 1
 
 
 def main():
@@ -41,10 +43,6 @@ def main():
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-  summary_dir = utils.get_summary_dir()
-
-  writer = SummaryWriter(log_dir=summary_dir)
-
   image_tfms = transforms.Compose([
       transforms.ToTensor(),
       OmniglotTransformation(resize_factor=config['image_resize_factor'])
@@ -52,24 +50,72 @@ def main():
 
   image_shape = config['image_shape']
   pretrained_model_path = config.get('pretrained_model_path', None)
+  previous_run_path = config.get('previous_run_path', None)
+  train_from = config.get('train_from', None)
 
   # Pretraining
   # ---------------------------------------------------------------------------
+  start_epoch = 1
+
+  if previous_run_path:
+    summary_dir = previous_run_path
+    writer = SummaryWriter(log_dir=summary_dir)
+    model = CLS(image_shape, config, device=device, writer=writer).to(device)
+
+    # Ensure that pretrained model path doesn't exist so that training occurs
+    pretrained_model_path = None
+
+    if train_from == 'scratch':
+      # Clear the directory
+      for file in os.listdir(previous_run_path):
+        path = os.path.join(previous_run_path, file)
+        try:
+          os.unlink(os.path.join(path))
+        except Exception as e:
+          print(f"Failed to remove file with path {path} due to exception {e}")
+
+    elif train_from == 'latest':
+      model_path = os.path.join(previous_run_path, 'pretrained_model_*')
+      # Find the latest file in the directory
+      latest = max(glob.glob(model_path), key=os.path.getctime)
+
+      # Find the epoch that was stopped on
+      i = len(latest) - 4 # (from before the .pt)
+      latest_epoch = 0
+      while latest[i] != '_':
+        latest_epoch *= 10
+        latest_epoch += int(latest[i])
+        i -= 1
+
+      if latest_epoch < config['pretrain_epochs']:
+        start_epoch = latest_epoch + 1
+
+      print("Attempting to find existing checkpoint")
+      if os.path.exists(latest):
+        try:
+          model.load_state_dict(torch.load(latest))
+        except:
+          print(f"Failed to load model from path: {latest}. Please check path and try again.")
+          return
+
+  else:
+    summary_dir = utils.get_summary_dir()
+    writer = SummaryWriter(log_dir=summary_dir)
+    model = CLS(image_shape, config, device=device, writer=writer).to(device)
+
   if not pretrained_model_path:
     background_loader = torch.utils.data.DataLoader(
         datasets.Omniglot('./data', background=True, download=True, transform=image_tfms),
         batch_size=config['pretrain_batch_size'], shuffle=True)
 
-    model = CLS(image_shape, config, device=device, writer=writer).to(device)
-
     # Pre-train the model
-    for epoch in range(1, config['pretrain_epochs'] + 1):
+    for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
       model.train()
 
       for batch_idx, (data, target) in enumerate(background_loader):
         data, target = data.to(device), target.to(device)
 
-        losses, _ = model(data, labels=target, mode='pretrain')
+        losses, _ = model(data, labels=target if model.is_ltm_supervised() else None, mode='pretrain')
         pretrain_loss = losses['ltm']['memory']['loss'].item()
 
         if batch_idx % LOG_EVERY == 0:
@@ -77,10 +123,10 @@ def main():
               epoch, batch_idx * len(data), len(background_loader.dataset),
               100. * batch_idx / len(background_loader), pretrain_loss))
 
-    pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
-
-    print('Saving model to:', pretrained_model_path)
-    torch.save(model.state_dict(), pretrained_model_path)
+      if epoch % SAVE_EVERY == 0:
+        pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
+        print('Saving model to:', pretrained_model_path)
+        torch.save(model.state_dict(), pretrained_model_path)
 
   # Study and Recall
   # ---------------------------------------------------------------------------
@@ -101,7 +147,7 @@ def main():
   oneshot_dataset = enumerate(zip(study_loader, recall_loader))
 
   # Initialise metrics
-  lake_oneshot_metrics = LakeOneshotMetrics()
+  oneshot_metrics = OneshotMetrics()
 
   # Load the pretrained model
   model = CLS(image_shape, config, device=device, writer=writer).to(device)
@@ -131,19 +177,42 @@ def main():
     with torch.no_grad():
       model(recall_data, recall_target, mode='recall')
 
-      results = lake_oneshot_metrics.compute(model.features['study'], model.features['recall'],
-                                             modes=['oneshot'])
-      lake_oneshot_metrics.report(results)
+      if 'metrics' in config and config['metrics']:
+        metrics_config = config['metrics']
+
+        metrics_len = [len(value) for key, value in metrics_config.items()]
+        assert all(x == metrics_len[0] for x in metrics_len), 'Mismatch in metrics config'
+
+        for i in range(metrics_len[0]):
+          primary_feature = utils.find_json_value(metrics_config['primary_feature_names'][i], model.features)
+          primary_label = utils.find_json_value(metrics_config['primary_label_names'][i], model.features)
+          secondary_feature = utils.find_json_value(metrics_config['secondary_feature_names'][i], model.features)
+          secondary_label = utils.find_json_value(metrics_config['secondary_label_names'][i], model.features)
+          comparison_type = metrics_config['comparison_types'][i]
+          prefix = metrics_config['prefixes'][i]
+
+          oneshot_metrics.compare(prefix,
+                                  primary_feature, primary_label,
+                                  secondary_feature, secondary_label,
+                                  comparison_type=comparison_type)
+
+      # PR Accuracy
+      oneshot_metrics.compare('pr',
+                              None, model.features['study']['stm_pr'],
+                              None, model.features['recall']['stm_pr'],
+                              comparison_type='accuracy')
+
+      oneshot_metrics.report()
 
       summary_names = [
-          'study_inputs',
-          'study_stm_pr',
-          'study_stm_pc',
+           'study_inputs',
+           'study_stm_pr',
+           'study_stm_pc',
 
-          'recall_inputs',
-          'recall_stm_pr',
-          'recall_stm_pc',
-          'recall_stm_recon'
+           'recall_inputs',
+           'recall_stm_pr',
+           'recall_stm_pc',
+           'recall_stm_recon'
       ]
 
       summary_images = []
@@ -162,10 +231,11 @@ def main():
 
       utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
 
-  lake_oneshot_metrics.report_averages()
+  oneshot_metrics.report_averages()
 
   writer.flush()
   writer.close()
+
 
 if __name__ == '__main__':
   main()

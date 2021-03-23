@@ -22,175 +22,132 @@ def set_seed(seed):
   torch.manual_seed(seed)
 
 
-def compute_matching(modes, train_features, test_features, comparison_type='mse'):
+def find_json_value(key_path, json, delimiter='.'):
+  paths = key_path.split(delimiter)
+  data = json
+  for i in range(0, len(paths)):
+    data = data[paths[i]]
+  return data
+
+
+def mse(x, y):
+  return np.square(x - y).mean()
+
+
+def overlap_match(a, b):
+  """ a, b = (0,1)
+  Overlap is where tensors have 1's in the same position.
+  Return number of bits that overlap """
+  return torch.sum(a*b)
+
+
+def compute_matrix_prep(primary_features, secondary_features):
+  primary_ftrs = primary_features  # shape = [num labels, feature_size]
+  secondary_ftrs = secondary_features  # shape = [num labels, feature_size]
+
+  num_labels = primary_ftrs.shape[0]
+  matrix = np.zeros([num_labels, num_labels])
+
+  return primary_ftrs, secondary_ftrs, num_labels, matrix
+
+
+def compute_matrix(primary_features, secondary_features, comparison_type_='mse'):
   """
-  For each of the possible metrics (feature types), calculate and return a similarity matrix and scalar accuracy.
+  Compute a 'confusion matrix' style matrix with comparison (e.g. mse)
+  between primary and secondary sets for a specified feature type.
 
-  @:param train_features = dic(feature_type, [label 1 value, label 2 value, label 3 value, ......])
-  feature_type e.g. 'dg_hidden', 'dg_recon'
-    special case is `labels`
-  @:param test_features same format as train_features
-  @:param mode = 'oneshot' or 'instance' (see compute_truth_matrix_[oneshot/instance] for description)
-  @:param comparison_type_ type of comparison to use, could be 'mse' or 'overlap'
-  @:param test_first compares all train sample to a given test sample (instead of the opposite, which is the default)
-  @:return matching_matrices, matching_accuracies: {feature_type --> matrix/accuracies}
+                        Secondary Label
+  Primary Label |    Label 1              Label 2              Label 3
+  ----------------------------------------------------------------------------------
+  Label 1       |     mse(trn_1, tst_1)   mse(trn_1, tst_2)   mse(trn_1, tst_2)
+  Label 2       |     mse(trn_2, tst_1)   ...                  ...
+  Label 3       |     mse(trn_3, tst_1)   ...                  ...
+  Label 4       |     mse(trn_4, tst_1)   ...                  ...
+
   """
+  primary_ftrs, secondary_ftrs, num_labels, matrix = compute_matrix_prep(primary_features, secondary_features)
 
-  def overlap_match(a, b):
-    """ a, b = (0,1)
-    Overlap is where tensors have 1's in the same position.
-    Return number of bits that overlap """
-    return torch.sum(a*b)
-
-  def compute_matrix_prep(feature_type):
-    if feature_type not in train_features.keys() or feature_type not in test_features.keys():
-      return None
-
-    train_ftrs = train_features[feature_type]  # shape = [num labels, feature_size]
-    test_ftrs = test_features[feature_type]  # shape = [num labels, feature_size]
-
-    num_labels = train_ftrs.shape[0]
-    matrix = np.zeros([num_labels, num_labels])
-
-    return train_ftrs, test_ftrs, num_labels, matrix
-
-  def compute_matrix(feature_type, comparison_type_='mse'):
-    """
-    Compute a 'confusion matrix' style matrix of the mse between test and train sets - for a specified feature type
-    For feature_type='labels', compute float equivalent of True(1.0)/False(0.0) if they are the same or not.
-
-    @:param feature_type the name (key in dic train_features and test_features) of features to use
-
-                         Test Label
-    Train Label |    Label 1              Label 2              Label 3
-    ----------------------------------------------------------------------------------
-    Label 1     |     mse(trn_1, tst_1)   mse(trn_1, tst_2)   mse(trn_1, tst_2)
-    Label 2     |     mse(trn_2, tst_1)   ...                  ...
-    Label 3     |     mse(trn_3, tst_1)   ...                  ...
-    Label 4     |     mse(trn_4, tst_1)   ...                  ...
-
-    """
-
-    train_ftrs, test_ftrs, num_labels, matrix = compute_matrix_prep(feature_type)
-
-    for i in range(num_labels):
-      train = train_ftrs[i]
-      for j in range(num_labels):
-        test = test_ftrs[j]
-
-        if comparison_type_ == 'mse':
-          matrix[i, j] = np.square(train - test).mean()
-        else:   # overlap
-          matrix[i, j] = overlap_match(train, test)
-
-    return matrix
-
-  def compute_truth_matrix_oneshot():
-    """
-    Compute truth matrix for oneshot test
-    Find matching labels in Test and Train and set that cell 'true match'
-    """
-
-    train_ftrs, test_ftrs, num_labels, matrix = compute_matrix_prep('labels')
-
-    for idx_train in range(num_labels):
-      for idx_test in range(num_labels):
-        if train_ftrs[idx_train] == test_ftrs[idx_test]:
-          matrix[idx_train, idx_test] = 1.0
-        else:
-          matrix[idx_train, idx_test] = 0.0
-    return matrix
-
-  def compute_truth_matrix_instance():
-    """
-    Compute truth matrix for test of instance learning
-    Test and Train are the same exemplars, and we are matching to exact exemplar, so diagonals are 'true match'.
-    """
-
-    # the feature_type passed to prep is irrelevant, we just want data structures it creates
-    _, _, num_labels, matrix = compute_matrix_prep('labels')
-
-    for idx_train in range(num_labels):
-      for idx_test in range(num_labels):
-        if idx_train == idx_test:  # the same exemplar, so 'correct' answer
-          matrix[idx_train, idx_test] = 1.0
-        else:
-          matrix[idx_train, idx_test] = 0.0
-    return matrix
-
-  def compute_accuracy(similarity, comparison_type_='mse'):
-    """
-
-    @:param similarity: matrix [train x test], size=[num labels x num labels], elements=similarity score
-    @:param comparison_type_: function type used for comparisons, could be 'mse' or 'overlap'
-    @:return:
-    """
-
-    dbug = False
-    if dbug:
-      print("------------ COMPUTE ACCURACY ---------------")
-      predictions = np.argmin(similarity, axis=1)    # argmin for each train sample, rows (across test samples, cols)
-      truth = np.argmax(truth_matrix, axis=1)
-      acc = metrics.accuracy_score(truth, predictions)
-      print(similarity)
-      print(truth_matrix)
-      print(predictions)
-      print(truth)
-      print("Accuracy = {0}".format(acc))
-
-    num_labels = similarity.shape[0]
-    correct = 0
-    max_correct = 0
-    sum_ambiguous_ = 0
-    for i in range(num_labels):
+  for i in range(num_labels):
+    primary = primary_ftrs[i]
+    for j in range(num_labels):
+      secondary = secondary_ftrs[j]
 
       if comparison_type_ == 'mse':
-        best_test_idx = np.argmin(similarity[i, :])  # this constitutes the prediction
+        matrix[i, j] = mse(primary, secondary)
       else:   # overlap
-        best_test_idx = np.argmax(similarity[i, :])  # this constitutes the prediction
+        matrix[i, j] = overlap_match(primary, secondary)
 
-      best_val = similarity[i, best_test_idx]
-      bast_val_indices = np.where(similarity[i] == best_val)
-      if len(bast_val_indices[0]) > 1:
-        sum_ambiguous_ += 1
+  return matrix
 
-      num_correct = np.sum(truth_matrix[i, :])  # is there a correct answer (i.e. was there a matching class?)
-      if num_correct > 0:
-        max_correct = max_correct + 1
 
-      val = truth_matrix[i, best_test_idx]  # was this one of the matching classes (there may be more than 1)
+def compute_accuracy(similarity, truth_matrix, comparison_type_='mse'):
+  """
 
-      if val == 1.0:
-        correct = correct + 1
+  @:param similarity: matrix [train x test], size=[num labels x num labels], elements=similarity score
+  @:param comparison_type_: function type used for comparisons, could be 'mse' or 'overlap'
+  @:return:
+  """
 
-    if max_correct == 0:
-      accuracy = -1.0
-    else:
-      accuracy = correct / max_correct
-    return accuracy, sum_ambiguous_
+  dbug = False
+  if dbug:
+    print("------------ COMPUTE ACCURACY ---------------")
+    predictions = np.argmin(similarity, axis=1)    # argmin for each train sample, rows (across test samples, cols)
+    truth = np.argmax(truth_matrix, axis=1)
+    acc = metrics.accuracy_score(truth, predictions)
+    print(similarity)
+    print(truth_matrix)
+    print(predictions)
+    print(truth)
+    print("Accuracy = {0}".format(acc))
 
-  if 'oneshot' in modes:
-    truth_matrix = compute_truth_matrix_oneshot()
+  num_labels = similarity.shape[0]
+  correct = 0
+  max_correct = 0
+  sum_ambiguous_ = 0
+  for i in range(num_labels):
+
+    if comparison_type_ == 'mse':
+      best_test_idx = np.argmin(similarity[i, :])  # this constitutes the prediction
+    else:   # overlap
+      best_test_idx = np.argmax(similarity[i, :])  # this constitutes the prediction
+
+    best_val = similarity[i, best_test_idx]
+    bast_val_indices = np.where(similarity[i] == best_val)
+    if len(bast_val_indices[0]) > 1:
+      sum_ambiguous_ += 1
+
+    num_correct = np.sum(truth_matrix[i, :])  # is there a correct answer (i.e. was there a matching class?)
+    if num_correct > 0:
+      max_correct = max_correct + 1
+
+    val = truth_matrix[i, best_test_idx]  # was this one of the matching classes (there may be more than 1)
+
+    if val == 1.0:
+      correct = correct + 1
+
+  if max_correct == 0:
+    accuracy = -1.0
   else:
-    truth_matrix = compute_truth_matrix_instance()
+    accuracy = correct / max_correct
 
-  matching_matrices = {'train_labels': train_features['labels'],
-                       'test_labels': test_features['labels'],
-                       'truth': truth_matrix}
-  matching_accuracies = {}
-  sum_ambiguous = {}
-  for feature_type in test_features.keys():
-    if feature_type == 'labels':
-      continue
+  return accuracy, sum_ambiguous_
 
-    if feature_type not in train_features.keys():
-      continue
 
-    feature_matrix = compute_matrix(feature_type, comparison_type)
-    matching_matrices[feature_type] = feature_matrix
-    matching_accuracies[feature_type], sum_ambiguous[feature_type] = compute_accuracy(feature_matrix, comparison_type)
+def compute_truth_matrix(primary_labels, secondary_labels):
+  """
+  Compute truth matrix for oneshot test
+  Find matching labels in Test and Train and set that cell 'true match'
+  """
+  primary_ftrs, secondary_ftrs, num_labels, matrix = compute_matrix_prep(primary_labels, secondary_labels)
 
-  return matching_matrices, matching_accuracies, sum_ambiguous
+  for idx_primary in range(num_labels):
+    for idx_secondary in range(num_labels):
+      if primary_ftrs[idx_primary] == secondary_ftrs[idx_secondary]:
+        matrix[idx_primary, idx_secondary] = 1.0
+      else:
+        matrix[idx_primary, idx_secondary] = 0.0
+
+  return matrix
 
 
 def add_completion_summary(summary_images, folder, batch, save_figs=True, plot_encoding=True, plot_diff=False):

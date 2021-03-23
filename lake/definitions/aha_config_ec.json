@@ -4,37 +4,52 @@
   "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
 
-  "pretrained_model_path": "./runs/20210223-145831/pretrained_model_10.pt",
-  "pretrain_epochs": 10,
+  "pretrain_epochs": 15,
   "pretrain_batch_size": 128,
-  "pretrained_model_path": "/mnt/c/Users/pulin/Projects/ProjectAGI/pt-aha/lake/runs/20210223-234348/pretrained_model_10.pt",
 
   "study_steps": 60,
   "study_batch_size": 20,
 
-  "ltm_type": "vgg",
+  "ltm_type": "vc",
   "stm_type": "aha",
-
-  "metrics": {
-    "prefixes": ["ps", "pc", "pr"],
-    "primary_feature_names": ["study.stm_ps", "study.stm_pc", "study.stm_pr"],
-    "primary_label_names": ["study.labels", "study.labels", "study.labels"],
-    "secondary_feature_names": ["recall.stm_ps", "recall.stm_pc", "recall.stm_pr"],
-    "secondary_label_names": ["recall.labels", "recall.labels", "recall.labels"],
-    "comparison_types": ["match_mse", "match_mse", "match_mse"]
-  },
+  "ec_type": "bvae",
 
   "ltm": {
     "learning_rate": 0.001,
-    "weight_decay": 0.0001,
-    "num_stages": 2,
-    "num_filters": 48,
-    "use_channel_wise_attention": true,
+
+    "filters": 121,
+    "kernel_size": 10,
+    "stride": 5,
+    "eval_stride": 1,
+    "encoder_padding": "same",
+    "decoder_padding": "same",
+
+    "encoder_nonlinearity": "none",
+    "decoder_nonlinearity": "none",
+
+    "use_bias": true,
+    "use_tied_weights": true,
+    "use_lifetime_sparsity": true,
+
+    "sparsity": 1,
+    "sparsity_output_factor": 4.0,
+
+    "output_pool_size": 4,
+    "output_pool_stride": 4,
+    "output_norm_per_sample": true,
 
     "classifier": {
-      "output_units": [2000]
+      "learning_rate": 0.001,
+      "weight_decay": 0.000025,
+
+      "input_dropout": 0.0,
+      "hidden_dropout": [],
+
+      "hidden_units": [],
+      "output_units": 20
     }
   },
+  "ec":{},
   "stm": {
     "ps": {
         "inhibition_decay": 0.95,
