@@ -73,6 +73,9 @@ if __name__ == '__main__':
     Usage:
             Please provide the absolute path to the model config file and pth file of the 
             pre-trained model.
+
+            You can simply run this file with python
+            $ python in_action.py
     '''
     config_filepath = '/mnt/c/Users/pulin/Projects/ProjectAGI/pt-aha/lake/definitions/aha_config.json'
     pretrained_model_path = '/mnt/c/Users/pulin/Projects/ProjectAGI/pt-aha/lake/runs/20210223-234348/pretrained_model_10.pt'
