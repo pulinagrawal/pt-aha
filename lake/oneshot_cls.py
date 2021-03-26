@@ -21,6 +21,7 @@ from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDat
 from oneshot_metrics import OneshotMetrics
 
 LOG_EVERY = 20
+VAL_EVERY = 64
 SAVE_EVERY = 1
 
 
@@ -104,15 +105,23 @@ def main():
     model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
   if not pretrained_model_path:
-    background_loader = torch.utils.data.DataLoader(
-        datasets.Omniglot('./data', background=True, download=True, transform=image_tfms),
-        batch_size=config['pretrain_batch_size'], shuffle=True)
+    val_split = 0.175
+
+    dataset = datasets.Omniglot('./data', background=True, download=True, transform=image_tfms)
+
+    val_size = round(val_split * len(dataset))
+    train_size = len(dataset) - val_size
+
+    train_set, val_set = torch.utils.data.random_split(dataset, [train_size, val_size])
+
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['pretrain_batch_size'], shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['pretrain_batch_size'], shuffle=True)
 
     # Pre-train the model
     for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
       model.train()
 
-      for batch_idx, (data, target) in enumerate(background_loader):
+      for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
 
         losses, _ = model(data, labels=target if model.is_ltm_supervised() else None, mode='pretrain')
@@ -120,8 +129,22 @@ def main():
 
         if batch_idx % LOG_EVERY == 0:
           print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-              epoch, batch_idx * len(data), len(background_loader.dataset),
-              100. * batch_idx / len(background_loader), pretrain_loss))
+              epoch, batch_idx * len(data), len(train_loader.dataset),
+              100. * batch_idx / len(train_loader), pretrain_loss))
+
+        if batch_idx % VAL_EVERY == 0:
+          model.eval()
+          with torch.no_grad():
+            for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
+              val_data, val_target = val_data.to(device), val_target.to(device)
+
+              val_losses, _ = model(val_data, labels=val_target if model.is_ltm_supervised() else None, mode='validate')
+              val_pretrain_loss = val_losses['ltm']['memory']['loss'].item()
+
+              if batch_idx_val % LOG_EVERY == 0:
+                print('Validation for Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                  epoch, batch_idx_val * len(val_data), len(val_loader.dataset),
+                         100. * batch_idx_val / len(val_loader), val_pretrain_loss))
 
       if epoch % SAVE_EVERY == 0:
         pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')

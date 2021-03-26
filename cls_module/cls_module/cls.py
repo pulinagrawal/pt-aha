@@ -176,6 +176,9 @@ class CLS(nn.Module):
   def pretrain(self, inputs, labels):
     return self.forward(inputs, labels, mode='pretrain')
 
+  def validate(self, inputs, labels):
+    return self.forward(inputs, labels, mode='validate')
+
   def memorise(self, inputs, labels):
     return self.forward(inputs, labels, mode='study')
 
@@ -201,6 +204,11 @@ class CLS(nn.Module):
     if mode == 'pretrain':
       self.train()
       self.freeze([self.ltm_key + '.classifier', self.stm_key])
+
+    # Freeze ALL except LTM feature extractor during validation
+    elif mode == 'validate':
+      self.eval()
+      self.freeze([self.ltm_key, self.stm_key])
 
     # Freeze LTM during memorisation
     elif mode == 'study':
@@ -228,7 +236,6 @@ class CLS(nn.Module):
       accuracies[self.ltm_key] = torch.eq(softmax_preds, labels).data.cpu().float().mean()
 
     if mode in ['study', 'recall']:
-
       next_input = outputs[self.ltm_key]['memory']['output'].detach()  # Ensures no gradients pass through modules
 
       # iterate EC
