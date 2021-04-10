@@ -21,8 +21,11 @@ from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDat
 from oneshot_metrics import OneshotMetrics
 
 LOG_EVERY = 20
-VAL_EVERY = 64
+VAL_EVERY = 20
 SAVE_EVERY = 1
+MAX_VAL_STEPS = -1
+MAX_PRETRAIN_STEPS = -1
+VAL_SPLIT = 0.175
 
 
 def main():
@@ -45,8 +48,8 @@ def main():
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
   image_tfms = transforms.Compose([
-      transforms.ToTensor(),
-      OmniglotTransformation(resize_factor=config['image_resize_factor'])
+    transforms.ToTensor(),
+    OmniglotTransformation(resize_factor=config['image_resize_factor'])
   ])
 
   image_shape = config['image_shape']
@@ -81,7 +84,7 @@ def main():
       latest = max(glob.glob(model_path), key=os.path.getctime)
 
       # Find the epoch that was stopped on
-      i = len(latest) - 4 # (from before the .pt)
+      i = len(latest) - 4  # (from before the .pt)
       latest_epoch = 0
       while latest[i] != '_':
         latest_epoch *= 10
@@ -95,8 +98,8 @@ def main():
       if os.path.exists(latest):
         try:
           model.load_state_dict(torch.load(latest))
-        except:
-          print(f"Failed to load model from path: {latest}. Please check path and try again.")
+        except Exception as e:
+          print(f"Failed to load model from path: {latest}. Please check path and try again due to exception {e}.")
           return
 
   else:
@@ -105,11 +108,10 @@ def main():
     model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
   if not pretrained_model_path:
-    val_split = 0.175
 
     dataset = datasets.Omniglot('./data', background=True, download=True, transform=image_tfms)
 
-    val_size = round(val_split * len(dataset))
+    val_size = round(VAL_SPLIT * len(dataset))
     train_size = len(dataset) - val_size
 
     train_set, val_set = torch.utils.data.random_split(dataset, [train_size, val_size])
@@ -119,9 +121,13 @@ def main():
 
     # Pre-train the model
     for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
-      model.train()
 
       for batch_idx, (data, target) in enumerate(train_loader):
+
+        if 0 < MAX_PRETRAIN_STEPS < batch_idx:
+          print("Pretrain steps, {}, has exceeded max of {}.".format(batch_idx, MAX_PRETRAIN_STEPS))
+          break
+
         data, target = data.to(device), target.to(device)
 
         losses, _ = model(data, labels=target if model.is_ltm_supervised() else None, mode='pretrain')
@@ -129,22 +135,28 @@ def main():
 
         if batch_idx % LOG_EVERY == 0:
           print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-              epoch, batch_idx * len(data), len(train_loader.dataset),
-              100. * batch_idx / len(train_loader), pretrain_loss))
+            epoch, batch_idx, len(train_loader),
+            100. * batch_idx / len(train_loader), pretrain_loss))
 
-        if batch_idx % VAL_EVERY == 0:
-          model.eval()
+        if batch_idx % VAL_EVERY == 0 or batch_idx == len(train_loader) - 1:
+          logging.info("\t--- Start validation")
+
           with torch.no_grad():
             for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
+
+              if 0 > MAX_VAL_STEPS > batch_idx_val:
+                print("\tval batch steps, {}, has exceeded max of {}.".format(batch_idx_val, MAX_VAL_STEPS))
+                break
+
               val_data, val_target = val_data.to(device), val_target.to(device)
 
               val_losses, _ = model(val_data, labels=val_target if model.is_ltm_supervised() else None, mode='validate')
               val_pretrain_loss = val_losses['ltm']['memory']['loss'].item()
 
               if batch_idx_val % LOG_EVERY == 0:
-                print('Validation for Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                  epoch, batch_idx_val * len(val_data), len(val_loader.dataset),
-                         100. * batch_idx_val / len(val_loader), val_pretrain_loss))
+                print('\tValidation for Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                  epoch, batch_idx_val, len(val_loader),
+                  100. * batch_idx_val / len(val_loader), val_pretrain_loss))
 
       if epoch % SAVE_EVERY == 0:
         pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
@@ -156,14 +168,14 @@ def main():
 
   # Prepare data loaders
   study_loader = torch.utils.data.DataLoader(
-      OmniglotOneShotDataset('./data', train=True, download=True,
-                             transform=image_tfms, target_transform=None),
-      batch_size=config['study_batch_size'], shuffle=False)
+    OmniglotOneShotDataset('./data', train=True, download=True,
+                           transform=image_tfms, target_transform=None),
+    batch_size=config['study_batch_size'], shuffle=False)
 
   recall_loader = torch.utils.data.DataLoader(
-      OmniglotOneShotDataset('./data', train=False, download=True,
-                             transform=image_tfms, target_transform=None),
-      batch_size=config['study_batch_size'], shuffle=False)
+    OmniglotOneShotDataset('./data', train=False, download=True,
+                           transform=image_tfms, target_transform=None),
+    batch_size=config['study_batch_size'], shuffle=False)
 
   assert len(study_loader) == len(recall_loader)
 
@@ -228,14 +240,14 @@ def main():
       oneshot_metrics.report()
 
       summary_names = [
-           'study_inputs',
-           'study_stm_pr',
-           'study_stm_pc',
+        'study_inputs',
+        'study_stm_pr',
+        'study_stm_pc',
 
-           'recall_inputs',
-           'recall_stm_pr',
-           'recall_stm_pc',
-           'recall_stm_recon'
+        'recall_inputs',
+        'recall_stm_pr',
+        'recall_stm_pc',
+        'recall_stm_recon'
       ]
 
       summary_images = []

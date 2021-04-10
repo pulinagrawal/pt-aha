@@ -4,7 +4,7 @@
   "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
 
-  "pretrain_epochs": 10,
+  "pretrain_epochs": 1,
   "pretrain_batch_size": 128,
 
   "study_steps": 60,
@@ -13,13 +13,16 @@
   "ltm_type": "vc",
   "stm_type": "aha",
 
+  "previous_run_path": "./runs/20210410-132631",
+  "train_from": "latest",
+
   "ltm": {
     "learning_rate": 0.001,
 
     "filters": 121,
     "kernel_size": 10,
     "stride": 5,
-    "eval_stride": 1,
+    "eval_stride": 5,
     "encoder_padding": "same",
     "decoder_padding": "same",
 
@@ -30,8 +33,8 @@
     "use_tied_weights": true,
     "use_lifetime_sparsity": true,
 
-    "sparsity": 1,
-    "sparsity_output_factor": 4.0,
+    "sparsity": 4,
+    "sparsity_output_factor": 1.0,
 
     "output_pool_size": 4,
     "output_pool_stride": 4,
