@@ -74,6 +74,8 @@ def compute_matrix(primary_features, secondary_features, comparison_type_='mse')
 
       if comparison_type_ == 'mse':
         matrix[i, j] = mse(primary, secondary)
+      elif comparison_type_ == 'cos':
+        matrix[i, j] = torch.nn.CosineSimilarity(dim=0)(primary, secondary)
       else:   # overlap
         matrix[i, j] = overlap_match(primary, secondary)
 

@@ -21,6 +21,7 @@ from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDat
 from oneshot_metrics import OneshotMetrics
 
 LOG_EVERY = 20
+LOG_EVERY_EVAL = 1
 VAL_EVERY = 20
 SAVE_EVERY = 1
 MAX_VAL_STEPS = -1
@@ -165,6 +166,7 @@ def main():
 
   # Study and Recall
   # ---------------------------------------------------------------------------
+  print('-------- Few-shot Evaluation (Study and Recall) ---------')
 
   # Prepare data loaders
   study_loader = torch.utils.data.DataLoader(
@@ -188,6 +190,10 @@ def main():
   model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
   for idx, ((study_data, study_target), (recall_data, recall_target)) in oneshot_dataset:
+
+    if LOG_EVERY_EVAL > 0 and idx % LOG_EVERY_EVAL == 0:
+      print('Step #{}'.format(idx))
+
     study_data = study_data.to(device)
     study_target = torch.from_numpy(np.array(study_target)).to(device)
     recall_data = recall_data.to(device)
@@ -202,9 +208,6 @@ def main():
     model.train()
     for step in range(config['study_steps']):
       model(study_data, study_target, mode='study')
-
-      if step % LOG_EVERY == 0:
-        print('Run #{}: [{}/{}]'.format(idx, step, config['study_steps']))
 
     # Recall
     # --------------------------------------------------------------------------
@@ -231,11 +234,21 @@ def main():
                                   secondary_feature, secondary_label,
                                   comparison_type=comparison_type)
 
-      # PR Accuracy
-      oneshot_metrics.compare('pr',
-                              None, model.features['study']['stm_pr'],
-                              None, model.features['recall']['stm_pr'],
-                              comparison_type='accuracy')
+      # PR Accuracy (study first) - this is the version used in the paper
+      oneshot_metrics.compare(prefix='pr_sf_',
+                              primary_features=model.features['study']['stm_pr'],
+                              primary_labels=model.features['study']['labels'],
+                              secondary_features=model.features['recall']['stm_pr'],
+                              secondary_labels=model.features['recall']['labels'],
+                              comparison_type='match_mse')
+
+      # oneshot_metrics.compare(prefix='pr_rf_',
+      #                         primary_features=model.features['recall']['stm_pr'],
+      #                         primary_labels=model.features['recall']['labels'],
+      #                         secondary_features=model.features['study']['stm_pr'],
+      #                         secondary_labels=model.features['study']['labels'],
+      #                         comparison_type='match_mse')
+
 
       oneshot_metrics.report()
 

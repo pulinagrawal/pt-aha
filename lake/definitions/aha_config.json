@@ -13,8 +13,16 @@
   "ltm_type": "vc",
   "stm_type": "aha",
 
-  "previous_run_path": "./runs/20210410-132631",
-  "train_from": "latest",
+  "pretrained_model_path": "./runs/20210410-132631/pretrained_model_1.pt",
+
+  "metrics": {
+    "primary_feature_names": ["recall.stm_pr", "recall.stm_recon_ec"],
+    "primary_label_names": ["recall.labels", "recall.labels"],
+    "secondary_feature_names": ["study.stm_pr", "study.stm_recon_ec"],
+    "secondary_label_names": ["study.labels", "study.labels"],
+    "comparison_types": ["match_mse", "match_mse"],
+    "prefixes": ["pr_rf_", "ec_out_rf_"]
+  },
 
   "ltm": {
     "learning_rate": 0.001,
@@ -91,6 +99,19 @@
         "shift_range": false,
         "sum_norm": 10.0,
         "gain": 1.0
+    },
+    "pm_ec": {
+        "learning_rate": 0.01,
+        "weight_decay": 0.00004,
+
+        "num_units": 100,
+        "input_dropout": 0.0,
+        "hidden_dropout": 0.0,
+
+        "encoder_nonlinearity": "leaky_relu",
+        "decoder_nonlinearity": "leaky_relu",
+        "use_bias": true,
+        "norm_inputs": true
     },
     "pm": {
         "learning_rate": 0.01,

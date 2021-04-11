@@ -117,8 +117,15 @@ class AHA(MemoryInterface):
     # Build the Pattern Completion (PC) module
     pc_output_shape = self.build_pc(pc_config=self.config['pc'], pc_input_shape=ps_output_shape)
 
-    # Build the Pattern Mapping (PM) module
-    self.build_pm(pm_config=self.config['pm'], pm_input_shape=pc_output_shape, pm_target_shape=self.target_shape)
+    # Build the Pattern Mapping (PM) module - to the EC (as per biology)
+    self.build_ae(name='pm_ec', config=self.config['pm_ec'],
+                  input_shape=pc_output_shape,
+                  target_shape=self.input_shape)
+
+    # Build the Pattern Mapping (PM) module - to an arbitrary 'target' (main use-case is the original input image)
+    self.build_ae(name='pm', config=self.config['pm'],
+                  input_shape=pc_output_shape,
+                  target_shape=self.target_shape)
 
     # Build the Label Learner module
     if 'classifier' in self.config:
@@ -265,21 +272,25 @@ class AHA(MemoryInterface):
 
     return recalled
 
-  def build_pm(self, pm_config, pm_input_shape, pm_target_shape):
-    pm = SimpleAutoencoder(pm_input_shape, pm_config, output_shape=pm_target_shape).to(self.device)
-    pm_optimizer = optim.Adam(pm.parameters(),
-                              lr=pm_config['learning_rate'],
-                              weight_decay=pm_config['weight_decay'])
+  def build_ae(self, name, config, input_shape, target_shape):
+    ae = SimpleAutoencoder(input_shape, config, output_shape=target_shape).to(self.device)
+    ae_optimizer = optim.Adam(ae.parameters(),
+                              lr=config['learning_rate'],
+                              weight_decay=config['weight_decay'])
 
-    self.add_module('pm', pm)
-    self.add_optimizer('pm', pm_optimizer)
+    self.add_module(name, ae)
+    self.add_optimizer(name, ae_optimizer)
 
-  def forward_pm(self, inputs, targets):
+  def forward_ae(self, name, inputs, targets):
     """
     Perform one step using the PM module to learn to reconstruct input image using the patterns from the PC.
     """
-    if self.pm.training:
-      self.pm_optimizer.zero_grad()
+
+    ae = getattr(self, name)
+    ae_optimizer = getattr(self, name + '_optimizer')
+
+    if ae.training:
+      ae_optimizer.zero_grad()
 
     encoding, decoding = self.pm(inputs)
 
@@ -292,9 +303,9 @@ class AHA(MemoryInterface):
         'output': encoding.detach()  # Designated output for linked modules
     }
 
-    if self.pm.training:
+    if ae.training:
       loss.backward()
-      self.pm_optimizer.step()
+      ae_optimizer.step()
 
     return loss, outputs
 
@@ -322,10 +333,12 @@ class AHA(MemoryInterface):
     pc_cue = outputs['ps'] if self.training else outputs['pr']['z_cue']
     outputs['pc'] = self.forward_pc(inputs=pc_cue)
 
-    losses['pm'], outputs['pm'] = self.forward_pm(inputs=outputs['pc'], targets=targets)
+    losses['pm'], outputs['pm'] = self.forward_ae(name='pm', inputs=outputs['pc'], targets=targets)
+    losses['pm_ec'], outputs['pm_ec'] = self.forward_ae(name='pm_ec', inputs=outputs['pc'], targets=targets)
 
     outputs['encoding'] = outputs['pc'].detach()
     outputs['decoding'] = outputs['pm']['decoding'].detach()
+    outputs['decoding_ec'] = outputs['pm_ec']['decoding'].detach()
     outputs['output'] = outputs['pc'].detach()
 
     self.features = {
@@ -333,7 +346,8 @@ class AHA(MemoryInterface):
         'pr': outputs['pr']['pr_out'].detach().cpu(),
         'pc': outputs['pc'].detach().cpu(),
 
-        'recon': outputs['pm']['decoding'].detach().cpu()
+        'recon': outputs['pm']['decoding'].detach().cpu(),
+        'recon_ec': outputs['pm_ec']['decoding'].detach().cpu()
     }
 
     return losses, outputs
