@@ -1,7 +1,6 @@
-"""OmniglotOneShotDataset class."""
+"""CifarOneShotDataset class."""
 
 import os
-import copy
 
 from PIL import Image
 
@@ -9,27 +8,28 @@ import torch
 from torch.utils.data import Dataset
 
 import torchvision
-from torchvision.datasets.utils import download_and_extract_archive, check_integrity
+from torchvision.datasets.utils import check_integrity
 
 import numpy as np
 
 import imageio
 from scipy import ndimage
 
+from pathlib import Path
+from googleapiclient.discovery import build
+import io
+from googleapiclient.http import MediaIoBaseDownload
+import shutil
+import zipfile
 
-
-class OmniglotTransformation:
-  """Transform Omniglot digits by resizing, centring mass and inverting background/foreground."""
+class CifarTransformation:
+  """Transform Cifar images by resizing and centring"""
 
   def __init__(self, centre=True, invert=True, resize_factor=1.0):
     self.centre = centre
-    self.invert = invert
     self.resize_factor = resize_factor
 
   def __call__(self, x):
-    # Change from 5d to 4d
-    x = x.flatten(start_dim=1, end_dim=2)
-
     # Resize
     if self.resize_factor != 1.0:
       height = int(self.resize_factor * x.shape[1])
@@ -40,9 +40,6 @@ class OmniglotTransformation:
 
       x = torchvision.transforms.functional.to_tensor(x)
 
-    # Invert image
-    if self.invert:
-      x = torch.max(x) - x
 
     # Centre the image
     if self.centre:
@@ -72,19 +69,21 @@ class OmniglotTransformation:
     return x
 
 
-class OmniglotOneShotDataset(Dataset):
-  """Face Landmarks dataset."""
+class CifarOneShotDataset(Dataset):
+  """CIFAR one-shot dataset."""
 
-  num_runs = 20
+  num_runs = 10
   fname_label = 'class_labels.txt'
 
-  folder = 'omniglot_oneshot'
-  download_url_prefix = 'https://github.com/brendenlake/omniglot/raw/master/python/one-shot-classification'
+  folder = 'cifar-100-batches-py'
+  file_id = '1pTsCCMDj45kzFYgrnO67BWVbKs48Q3NI'
+
+  download_url_prefix = 'http://www.cs.toronto.edu/~kriz'
   zips_md5 = {
-      'all_runs': 'e8996daecdf12afeeb4a53a179f06b19'
+      'cifar100': 'e8996daecdf12afeeb4a53a179f06b19'
   }
 
-  def __init__(self, root, train=True, transform=None, target_transform=None, download=False):
+  def __init__(self, root, mode='train', transform=None, target_transform=None, download=False):
     """
     Args:
         csv_file (string): Path to the csv file with annotations.
@@ -93,13 +92,12 @@ class OmniglotOneShotDataset(Dataset):
             on a sample.
     """
     self.root = root
-    self.train = train
+    self.mode = mode
     self.transform = transform
     self.target_transform = target_transform
 
     self.root = os.path.join(root, self.folder)
     self.target_folder = self._get_target_folder()
-    self.phase_folder = self._get_phase_folder()
 
     if download:
       self.download()
@@ -141,16 +139,38 @@ class OmniglotOneShotDataset(Dataset):
     return True
 
   def download(self):
+    # this method downloads the CIFAR-100 few-shot dataset
+
     if self._check_integrity():
       print('Files already downloaded and verified')
       return
 
-    filename = self._get_target_folder()
-    zip_filename = filename + '.zip'
-    url = self.download_url_prefix + '/' + zip_filename
-    download_and_extract_archive(url, self.root,
-                                 extract_root=os.path.join(self.root, filename),
-                                 filename=zip_filename, md5=self.zips_md5[filename])
+    zip_filename = self._get_target_folder() + '.zip'
+
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.join("./data/auth.json")
+
+    service = build('drive', 'v3')
+    request = service.files().get_media(fileId=self.file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+
+    while done is False:
+      status, done = downloader.next_chunk()
+      print("Download %d%%." % int(status.progress() * 100))
+
+    print("Download completed")
+
+    Path(self.root).mkdir(parents=True, exist_ok=True)
+
+    # save
+    fh.seek(0)
+    with open(os.path.join(self.root, zip_filename), 'wb') as f:
+      shutil.copyfileobj(fh, f)
+
+    # unzip
+    with zipfile.ZipFile(os.path.join(self.root, zip_filename)) as zip_ref:
+      zip_ref.extractall(self.root)
 
   def get_filenames_and_labels(self):
     filenames = []
@@ -161,10 +181,9 @@ class OmniglotOneShotDataset(Dataset):
       if len(rs) == 1:
         rs = '0' + rs
 
-      run_folder = 'run' + rs
       target_path = os.path.join(self.root, self.target_folder)
       # run_path = os.path.join(target_path, run_folder)
-
+      '''
       with open(os.path.join(target_path, run_folder, self.fname_label)) as f:
         content = f.read().splitlines()
       pairs = [line.split() for line in content]
@@ -178,17 +197,25 @@ class OmniglotOneShotDataset(Dataset):
       test_files = [os.path.join(target_path, file) for file in test_files]
       train_files = [os.path.join(target_path, file) for file in train_files]
 
-      if self.train:
+      split_dir = os.path.join(target_path, 'splits', 'bertinetto')
+
+      if self.mode == 'train':
+        train_split =
+
         filenames.extend(train_files)
         labels.extend(train_labels)
-      else:
+
+      elif self.mode == 'test':
         filenames.extend(test_files)
         labels.extend(test_labels)
 
+      elif self.mode == 'val':
+        filenames.extend(val_files)
+        labels.extend(val_labels)
+'''
     return filenames, labels
 
   def _get_target_folder(self):
-    return 'all_runs'
+    return 'cifar100'
 
-  def _get_phase_folder(self):
-    return 'training' if self.train else 'test'
+

@@ -17,7 +17,11 @@ from cls_module.cls import CLS
 
 import utils
 
+from torchmeta.datasets.helpers import omniglot
+from torchmeta.utils.data import BatchMetaDataLoader
+
 from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDataset
+from cifar_one_shot_dataset import CifarTransformation, CifarOneShotDataset
 from oneshot_metrics import OneshotMetrics
 
 LOG_EVERY = 20
@@ -44,10 +48,19 @@ def main():
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-  image_tfms = transforms.Compose([
+  dataset_name = config.get('dataset')
+
+  if dataset_name == 'Omniglot':
+    image_tfms = transforms.Compose([
+        transforms.ToTensor(),
+        OmniglotTransformation(resize_factor=config['image_resize_factor'])
+    ])
+
+  elif dataset_name == 'CIFAR':
+    image_tfms = transforms.Compose([
       transforms.ToTensor(),
-      OmniglotTransformation(resize_factor=config['image_resize_factor'])
-  ])
+      CifarTransformation(resize_factor=config['image_resize_factor'])
+    ])
 
   image_shape = config['image_shape']
   pretrained_model_path = config.get('pretrained_model_path', None)
@@ -107,8 +120,17 @@ def main():
   if not pretrained_model_path:
     val_split = 0.175
 
-    dataset = datasets.Omniglot('./data', background=True, download=True, transform=image_tfms)
+    '''
+    if dataset_name == 'Omniglot':
+      dataset = datasets.Omniglot('./data', background=True, download=True, transform=image_tfms)
 
+    elif dataset_name == 'CIFAR':
+      dataset = datasets.CIFAR10('./data', download=True, transform=image_tfms, mode='train')
+    '''
+
+    dataset = omniglot("data", ways=20, shots=1, meta_train=True, download=True, transform=image_tfms)
+
+    '''
     val_size = round(val_split * len(dataset))
     train_size = len(dataset) - val_size
 
@@ -116,12 +138,16 @@ def main():
 
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['pretrain_batch_size'], shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['pretrain_batch_size'], shuffle=True)
+'''
+
+    train_loader = BatchMetaDataLoader(dataset, batch_size=config['pretrain_batch_size'])
 
     # Pre-train the model
     for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
       model.train()
 
-      for batch_idx, (data, target) in enumerate(train_loader):
+      for batch_idx, batch in enumerate(train_loader):
+        data, target = batch["train"]
         data, target = data.to(device), target.to(device)
 
         losses, _ = model(data, labels=target if model.is_ltm_supervised() else None, mode='pretrain')
@@ -132,6 +158,7 @@ def main():
               epoch, batch_idx * len(data), len(train_loader.dataset),
               100. * batch_idx / len(train_loader), pretrain_loss))
 
+        '''
         if batch_idx % VAL_EVERY == 0:
           model.eval()
           with torch.no_grad():
@@ -146,6 +173,7 @@ def main():
                   epoch, batch_idx_val * len(val_data), len(val_loader.dataset),
                          100. * batch_idx_val / len(val_loader), val_pretrain_loss))
 
+
       if epoch % SAVE_EVERY == 0:
         pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
         print('Saving model to:', pretrained_model_path)
@@ -153,19 +181,37 @@ def main():
 
   # Study and Recall
   # ---------------------------------------------------------------------------
+'''
+        '''
+  if dataset_name == 'Omniglot':
+    # Prepare data loaders
+    study_loader = torch.utils.data.DataLoader(
+        OmniglotOneShotDataset('./data', train=True, download=True,
+                               transform=image_tfms, target_transform=None),
+        batch_size=config['study_batch_size'], shuffle=False)
 
-  # Prepare data loaders
-  study_loader = torch.utils.data.DataLoader(
-      OmniglotOneShotDataset('./data', train=True, download=True,
-                             transform=image_tfms, target_transform=None),
+    recall_loader = torch.utils.data.DataLoader(
+        OmniglotOneShotDataset('./data', train=False, download=True,
+                               transform=image_tfms, target_transform=None),
+        batch_size=config['study_batch_size'], shuffle=False)
+
+  elif dataset_name == 'CIFAR':
+    study_loader = torch.utils.data.DataLoader(
+      datasets.CIFAR10('./data', download=True, transform=image_tfms, mode='train', target_transform=None),
       batch_size=config['study_batch_size'], shuffle=False)
 
-  recall_loader = torch.utils.data.DataLoader(
-      OmniglotOneShotDataset('./data', train=False, download=True,
-                             transform=image_tfms, target_transform=None),
+    recall_loader = torch.utils.data.DataLoader(
+      datasets.CIFAR10('./data', download=True, transform=image_tfms, mode='test', target_transform=None),
       batch_size=config['study_batch_size'], shuffle=False)
+'''
 
-  assert len(study_loader) == len(recall_loader)
+  study_dataset = omniglot("data", ways=20, shots=1, meta_train=True, download=True, transform=image_tfms)
+  recall_dataset = omniglot("data", ways=20, shots=1, meta_test=True, download=True, transform=image_tfms)
+
+  study_loader = BatchMetaDataLoader(study_dataset, batch_size=config['study_batch_size'])
+  recall_loader = BatchMetaDataLoader(recall_dataset, batch_size=config['study_batch_size'])
+
+  assert len(study_loader.dataset) == len(recall_loader.dataset)
 
   oneshot_dataset = enumerate(zip(study_loader, recall_loader))
 
@@ -175,7 +221,10 @@ def main():
   # Load the pretrained model
   model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
-  for idx, ((study_data, study_target), (recall_data, recall_target)) in oneshot_dataset:
+  for idx, (study_batch, recall_batch) in oneshot_dataset:
+    study_data, study_target = study_batch["train"]
+    recall_data, recall_target = study_batch["train"]
+
     study_data = study_data.to(device)
     study_target = torch.from_numpy(np.array(study_target)).to(device)
     recall_data = recall_data.to(device)
