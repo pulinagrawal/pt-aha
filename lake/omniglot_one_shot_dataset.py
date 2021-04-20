@@ -27,9 +27,6 @@ class OmniglotTransformation:
     self.resize_factor = resize_factor
 
   def __call__(self, x):
-    # Change from 5d to 4d
-    x = x.flatten(start_dim=1, end_dim=2)
-
     # Resize
     if self.resize_factor != 1.0:
       height = int(self.resize_factor * x.shape[1])
@@ -192,3 +189,4 @@ class OmniglotOneShotDataset(Dataset):
 
   def _get_phase_folder(self):
     return 'training' if self.train else 'test'
+

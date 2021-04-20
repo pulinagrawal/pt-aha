@@ -1,7 +1,7 @@
 {
   "seed": 42,
 
-  "image_shape": [1, 3, 16, 16],
+  "image_shape": [1, 3, 32, 32],
   "image_resize_factor": 0.5,
 
   "pretrain_epochs": 10,
@@ -10,7 +10,7 @@
   "study_steps": 60,
   "study_batch_size": 20,
 
-  "dataset":  "Omniglot",
+  "dataset":  "CIFAR",
 
   "ltm_type": "vc",
   "stm_type": "aha",
