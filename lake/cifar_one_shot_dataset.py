@@ -111,7 +111,8 @@ class CifarOneShotDataset(Dataset):
     np.random.seed(63)
 
     for r in range(0, num_runs):
-      for a_class in self.classes:
+      for i in range(len(self.classes)):
+        a_class = self.classes[i]
 
         # selection of image
         if self.mode == 'train':
@@ -120,7 +121,8 @@ class CifarOneShotDataset(Dataset):
           selection = np.random.randint(low=300, high=600)
 
         images.append(dataset[a_class][selection][0])  # PIL image
-        labels.append(dataset[a_class][selection][1])  # 'fine' class label
+        #labels.append(dataset[a_class][selection][1])  # 'fine' class label
+        labels.append(i) # classify by class number instead
 
     return images, labels
 

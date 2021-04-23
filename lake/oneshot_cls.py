@@ -163,7 +163,7 @@ def main():
                 print('Validation for Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                   epoch, batch_idx_val * len(val_data), len(val_loader.dataset),
                          100. * batch_idx_val / len(val_loader), val_pretrain_loss))
-
+      '''
 
       if epoch % SAVE_EVERY == 0:
         pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
@@ -172,39 +172,37 @@ def main():
 
   # Study and Recall
   # ---------------------------------------------------------------------------
-'''
 
-    if dataset_name == 'Omniglot':
-      # Prepare data loaders
-      study_loader = torch.utils.data.DataLoader(
-          OmniglotOneShotDataset('./data', train=True, download=True,
-                                 transform=image_tfms, target_transform=None),
-          batch_size=config['study_batch_size'], shuffle=False)
-  
-      recall_loader = torch.utils.data.DataLoader(
-          OmniglotOneShotDataset('./data', train=False, download=True,
-                                 transform=image_tfms, target_transform=None),
-          batch_size=config['study_batch_size'], shuffle=False)
-  
-    elif dataset_name == 'CIFAR':
-      np.random.seed(28)
-      rand_class = np.random.randint(low=0, high=64, size=20)  # array of 20 random integers to select classes
 
-      study_loader = torch.utils.data.DataLoader(
-        CifarOneShotDataset('./data', mode='train', transform=image_tfms, target_transform=None,
-                            classes=rand_class, download=False),
+  if dataset_name == 'Omniglot':
+    # Prepare data loaders
+    study_loader = torch.utils.data.DataLoader(
+        OmniglotOneShotDataset('./data', train=True, download=True,
+                               transform=image_tfms, target_transform=None),
+        batch_size=config['study_batch_size'], shuffle=False)
+
+    recall_loader = torch.utils.data.DataLoader(
+        OmniglotOneShotDataset('./data', train=False, download=True,
+                               transform=image_tfms, target_transform=None),
         batch_size=config['study_batch_size'], shuffle=False)
   
-      recall_loader = torch.utils.data.DataLoader(
-        CifarOneShotDataset('./data', mode='test', transform=image_tfms, target_transform=None,
-                            classes=rand_class, download=False),
-        batch_size=config['study_batch_size'], shuffle=False)
+  elif dataset_name == 'CIFAR':
+    np.random.seed(28)
+    rand_class = np.random.randint(low=0, high=64, size=20)  # array of 20 random integers to select classes
+
+    study_loader = torch.utils.data.DataLoader(
+      CifarOneShotDataset('./data', mode='train', transform=image_tfms, target_transform=None,
+                          classes=rand_class, download=False),
+      batch_size=config['study_batch_size'], shuffle=False)
+
+    recall_loader = torch.utils.data.DataLoader(
+      CifarOneShotDataset('./data', mode='test', transform=image_tfms, target_transform=None,
+                          classes=rand_class, download=False),
+      batch_size=config['study_batch_size'], shuffle=False)
 
   assert len(study_loader) == len(recall_loader)
 
   oneshot_dataset = enumerate(zip(study_loader, recall_loader))
-
-  print(oneshot_dataset[0])
 
   # Initialise metrics
   oneshot_metrics = OneshotMetrics()
@@ -218,6 +216,8 @@ def main():
     study_target = torch.from_numpy(np.array(study_target)).to(device)
     recall_data = recall_data.to(device)
     recall_target = torch.from_numpy(np.array(recall_target)).to(device)
+
+
 
     # Reset to saved model
     model.load_state_dict(torch.load(pretrained_model_path))
