@@ -1,7 +1,7 @@
 
-**Metric Options
+## Metric Options
 
-***Comparison types
+### Comparison types
 
 There are two groups of comparison types:
 
@@ -27,7 +27,7 @@ The comparison types are:
 - mismatch - mean of absolute error
 - cos - cosine similarity
 
-***Features
+### Features
 
 For the AHA STM, the possible features are:
 
@@ -37,8 +37,12 @@ For the AHA STM, the possible features are:
 - stm_recon
 - stm_recon_ec
 
+For the 'visual component' LTM, the possible features are:
 
-**Specifying Metrics
+- ltm_vc - the encodings
+- ltm_recon - the image reconstruction
+
+## Specifying Metrics
 
 It is possible to add metrics in code or in the json.
 You select a text label (just for display purposes), comparison type, the metric, and primary/secondary.
@@ -53,9 +57,9 @@ Here is an example of two metrics being added via json:
 ```
   "metrics": {
     "prefixes": ["ltm_sf", "pr"],
-    "primary_feature_names": ["study.ltm","recall.stm_pr"],
+    "primary_feature_names": ["study.ltm_vc","recall.stm_pr"],
     "primary_label_names": ["study.labels", "recall.labels"],
-    "secondary_feature_names": ["recall.ltm","study.stm_pr"],
+    "secondary_feature_names": ["recall.ltm_vc","study.stm_pr"],
     "secondary_label_names": ["recall.labels", "study.labels"],
     "comparison_types": ["match_mse", "mse"]
   }
