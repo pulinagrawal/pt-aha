@@ -23,6 +23,9 @@ class VGG(MemoryInterface):
                                      num_output_classes=self.config['classifier']['output_units'],
                                      num_stages=self.config['num_stages'],
                                      use_channel_wise_attention=self.config['use_channel_wise_attention'],
+                                     kernel_size=self.config.get('kernel_size', 3),
+                                     stride=self.config.get('stride', 1),
+                                     eval_stride=self.config.get('eval_stride', 1),
                                      num_filters=self.config['num_filters']).to(self.device)
 
     model_optimizer = optim.AdamW(model.parameters(),

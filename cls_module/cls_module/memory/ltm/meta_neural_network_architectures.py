@@ -394,7 +394,7 @@ class MetaConvNormLayerLeakyReLU(nn.Module):
 
 class VGGActivationNormNetwork(nn.Module):
     def __init__(self, input_shape, num_output_classes, use_channel_wise_attention,
-                 num_stages, num_filters):
+                 num_stages, num_filters, kernel_size, stride, eval_stride):
         """
         Builds a multilayer convolutional network. It also provides functionality for passing external parameters to be
         used at inference time. Enables inner loop optimization readily.
@@ -414,6 +414,10 @@ class VGGActivationNormNetwork(nn.Module):
         self.input_shape = input_shape
         self.use_channel_wise_attention = use_channel_wise_attention
         self.num_output_classes = num_output_classes
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.eval_stride = eval_stride
+
         self.build_network()
 
     def build_network(self):
@@ -429,7 +433,8 @@ class VGGActivationNormNetwork(nn.Module):
         for i in range(self.num_stages):
             self.layer_dict['conv_{}'.format(i)] = MetaConvNormLayerLeakyReLU(input_shape=out.shape,
                                                                               num_filters=self.num_filters,
-                                                                              kernel_size=3, stride=1,
+                                                                              kernel_size=self.kernel_size,
+                                                                              stride=self.stride,
                                                                               padding=1,
                                                                               use_bias=True,
                                                                               groups=1)
