@@ -4,7 +4,9 @@
   "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
 
-  "pretrain_epochs": 1,
+
+
+  "pretrain_epochs": 5,
   "pretrain_batch_size": 128,
 
   "study_steps": 60,
@@ -13,15 +15,13 @@
   "ltm_type": "vc",
   "stm_type": "aha",
 
-  "pretrained_model_path": "./runs/20210410-132631/pretrained_model_1.pt",
-
   "metrics": {
-    "primary_feature_names": ["recall.stm_pr", "recall.stm_recon_ec"],
-    "primary_label_names": ["recall.labels", "recall.labels"],
-    "secondary_feature_names": ["study.stm_pr", "study.stm_recon_ec"],
-    "secondary_label_names": ["study.labels", "study.labels"],
-    "comparison_types": ["match_mse", "match_mse"],
-    "prefixes": ["pr_rf_", "ec_out_rf_"]
+    "prefixes": ["pc", "pr_rf_", "ec_out_", "ec_out_rf_"],
+    "primary_feature_names": ["study.stm_pc","recall.stm_pr", "study.stm_recon_ec", "recall.stm_recon_ec"],
+    "primary_label_names": ["study.labels", "recall.labels","study.labels", "recall.labels"],
+    "secondary_feature_names": ["recall.stm_pc","study.stm_pr", "recall.stm_recon_ec", "study.stm_recon_ec"],
+    "secondary_label_names": ["recall.labels", "study.labels", "recall.labels", "study.labels"],
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
   },
 
   "ltm": {
@@ -30,7 +30,7 @@
     "filters": 121,
     "kernel_size": 10,
     "stride": 5,
-    "eval_stride": 5,
+    "eval_stride": 1,
     "encoder_padding": "same",
     "decoder_padding": "same",
 
