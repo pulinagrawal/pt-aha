@@ -205,13 +205,11 @@ def main():
 
     # Study
     # --------------------------------------------------------------------------
-    model.train()
     for step in range(config['study_steps']):
       model(study_data, study_target, mode='study')
 
     # Recall
     # --------------------------------------------------------------------------
-    model.eval()
     with torch.no_grad():
       model(recall_data, recall_target, mode='recall')
 
