@@ -2,6 +2,7 @@
 
 import logging
 from collections import defaultdict
+from os import pathconf
 
 import torch
 import torch.nn as nn
@@ -107,7 +108,31 @@ class AHA(MemoryInterface):
         module_optimizer.state = defaultdict(dict)
 
   def build(self):
-    """Build AHA as short-term memory module."""
+    """
+    Build AHA as short-term memory module.
+    
+     There are two major modes. 
+     1) Standard CLS, with Hebbian learning in the perforant path
+    
+     Build:
+     DG -> CA3: set of weights (randomly initialised)
+     EC -> CA3: set of weights (randomly initialised)
+
+     Forward:
+     Propagate
+     Update weights given pre and post synaptic activity
+
+     2) Our approach, with error driven learning in perforant pathconf 
+     Build:
+     DG -> CA3: 1 to 1 clamp
+     EC -> CA3 = PR network
+
+     Forward:
+     Propagate
+     PR: BP Optimization step over
+
+    """
+
     # Build the Pattern Separation (PS) module
     ps_output_shape = self.build_ps(ps_config=self.config['ps'], ps_input_shape=self.input_shape)
 
@@ -335,6 +360,13 @@ class AHA(MemoryInterface):
 
     losses['pm'], outputs['pm'] = self.forward_ae(name='pm', inputs=outputs['pc'], targets=targets)
     losses['pm_ec'], outputs['pm_ec'] = self.forward_ae(name='pm_ec', inputs=outputs['pc'], targets=targets)
+
+    # 
+    if self.hebbian_perforant:
+      pass
+      # dw = dg.ca3    outputs[ps]  outputs[pc]     --> build: single set of weights (doesn't currently exist, because activations are copied across), PC must be initialised with random weights
+      # dw = ec.ca3    inputs       outputs[pc]     --> build: pr is just a single set of weights
+
 
     outputs['encoding'] = outputs['pc'].detach()
     outputs['decoding'] = outputs['pm']['decoding'].detach()
