@@ -4,7 +4,7 @@
   "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
 
-  "pretrained_model_path": "./runs/20210223-145831/pretrained_model_10.pt",
+  "pretrained_model_path": "./runs/20210412-134141/pretrained_model_5.pt",
   "pretrain_epochs": 10,
   "pretrain_batch_size": 128,
 
@@ -15,12 +15,12 @@
   "stm_type": "aha",
 
   "metrics": {
-    "prefixes": ["ps", "pc", "pr"],
-    "primary_feature_names": ["study.stm_ps", "study.stm_pc", "study.stm_pr"],
-    "primary_label_names": ["study.labels", "study.labels", "study.labels"],
-    "secondary_feature_names": ["recall.stm_ps", "recall.stm_pc", "recall.stm_pr"],
-    "secondary_label_names": ["recall.labels", "recall.labels", "recall.labels"],
-    "comparison_types": ["match_mse", "match_mse", "match_mse"]
+    "prefixes": ["pc", "pr_rf_", "ec_out_", "ec_out_rf_"],
+    "primary_feature_names": ["study.stm_pc","recall.stm_pr", "study.stm_recon_ec", "recall.stm_recon_ec"],
+    "primary_label_names": ["study.labels", "recall.labels","study.labels", "recall.labels"],
+    "secondary_feature_names": ["recall.stm_pc","study.stm_pr", "recall.stm_recon_ec", "study.stm_recon_ec"],
+    "secondary_label_names": ["recall.labels", "study.labels", "recall.labels", "study.labels"],
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
   },
 
   "ltm": {
@@ -29,6 +29,10 @@
     "num_stages": 2,
     "num_filters": 48,
     "use_channel_wise_attention": true,
+
+    "kernel_size": 3,
+    "stride": 1,
+    "eval_stride": 1,
 
     "classifier": {
       "output_units": [2000]
@@ -74,6 +78,19 @@
         "shift_range": false,
         "sum_norm": 10.0,
         "gain": 1.0
+    },
+    "pm_ec": {
+        "learning_rate": 0.01,
+        "weight_decay": 0.00004,
+
+        "num_units": 100,
+        "input_dropout": 0.0,
+        "hidden_dropout": 0.0,
+
+        "encoder_nonlinearity": "leaky_relu",
+        "decoder_nonlinearity": "leaky_relu",
+        "use_bias": true,
+        "norm_inputs": true
     },
     "pm": {
         "learning_rate": 0.01,
