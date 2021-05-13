@@ -189,3 +189,4 @@ class OmniglotOneShotDataset(Dataset):
 
   def _get_phase_folder(self):
     return 'training' if self.train else 'test'
+

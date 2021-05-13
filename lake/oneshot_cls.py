@@ -5,6 +5,7 @@ import json
 import argparse
 import logging
 import glob
+from tqdm import tqdm
 
 import numpy as np
 
@@ -17,7 +18,9 @@ from cls_module.cls import CLS
 
 import utils
 
+
 from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDataset
+from cifar_one_shot_dataset import CifarTransformation, CifarOneShotDataset
 from oneshot_metrics import OneshotMetrics
 
 LOG_EVERY = 20
@@ -44,14 +47,26 @@ def main():
   with open(args.config) as config_file:
     config = json.load(config_file)
 
-  utils.set_seed(config['seed'])
+  seed = config['seed']
+  utils.set_seed(seed)
+  np.random.seed(seed)
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-  image_tfms = transforms.Compose([
-    transforms.ToTensor(),
-    OmniglotTransformation(resize_factor=config['image_resize_factor'])
-  ])
+
+  dataset_name = config.get('dataset')
+
+  if dataset_name == 'Omniglot':
+    image_tfms = transforms.Compose([
+        transforms.ToTensor(),
+        OmniglotTransformation(resize_factor=config['image_resize_factor'])
+    ])
+
+  elif dataset_name == 'CIFAR':
+    image_tfms = transforms.Compose([
+      transforms.ToTensor(),
+      CifarTransformation(resize_factor=config['image_resize_factor'])
+    ])
 
   image_shape = config['image_shape']
   pretrained_model_path = config.get('pretrained_model_path', None)
@@ -110,7 +125,12 @@ def main():
 
   if not pretrained_model_path:
 
-    dataset = datasets.Omniglot('./data', background=True, download=True, transform=image_tfms)
+    if dataset_name == 'Omniglot':
+      dataset = datasets.Omniglot('./data', background=True, download=True, transform=image_tfms)
+
+    elif dataset_name == 'CIFAR':
+      dataset = datasets.CIFAR10('./data', download=True, transform=image_tfms)
+
 
     val_size = round(VAL_SPLIT * len(dataset))
     train_size = len(dataset) - val_size
@@ -142,6 +162,7 @@ def main():
         if batch_idx % VAL_EVERY == 0 or batch_idx == len(train_loader) - 1:
           logging.info("\t--- Start validation")
 
+
           with torch.no_grad():
             for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
 
@@ -169,15 +190,21 @@ def main():
   print('-------- Few-shot Evaluation (Study and Recall) ---------')
 
   # Prepare data loaders
-  study_loader = torch.utils.data.DataLoader(
-    OmniglotOneShotDataset('./data', train=True, download=True,
-                           transform=image_tfms, target_transform=None),
-    batch_size=config['study_batch_size'], shuffle=False)
+  if dataset_name == 'Omniglot':
+    study_dataset = OmniglotOneShotDataset('./data', train=True, download=True,
+                               transform=image_tfms, target_transform=None)
+    recall_dataset = OmniglotOneShotDataset('./data', train=False, download=True,
+                               transform=image_tfms, target_transform=None)
+  
+  elif dataset_name == 'CIFAR':
+    rand_class = np.random.randint(low=0, high=64, size=20)  # array of 20 random integers to select classes
+    study_dataset = CifarOneShotDataset('./data', mode='train', transform=image_tfms, target_transform=None,
+                        classes=rand_class, download=False)
+    recall_dataset = CifarOneShotDataset('./data', mode='test', transform=image_tfms, target_transform=None,
+                        classes=rand_class, download=False)
 
-  recall_loader = torch.utils.data.DataLoader(
-    OmniglotOneShotDataset('./data', train=False, download=True,
-                           transform=image_tfms, target_transform=None),
-    batch_size=config['study_batch_size'], shuffle=False)
+  study_loader = torch.utils.data.DataLoader(study_dataset, batch_size=config['study_batch_size'], shuffle=False)
+  recall_loader = torch.utils.data.DataLoader(recall_dataset, batch_size=config['study_batch_size'], shuffle=False)
 
   assert len(study_loader) == len(recall_loader)
 
@@ -190,7 +217,6 @@ def main():
   model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
   for idx, ((study_data, study_target), (recall_data, recall_target)) in oneshot_dataset:
-
     if LOG_EVERY_EVAL > 0 and idx % LOG_EVERY_EVAL == 0:
       print('Step #{}'.format(idx))
 

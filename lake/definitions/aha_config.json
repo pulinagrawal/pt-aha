@@ -4,13 +4,13 @@
   "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
 
-
-
-  "pretrain_epochs": 5,
+  "pretrain_epochs": 10,
   "pretrain_batch_size": 128,
 
   "study_steps": 60,
   "study_batch_size": 20,
+
+  "dataset":  "Omniglot",
 
   "ltm_type": "vc",
   "stm_type": "aha",
@@ -29,6 +29,7 @@
 
     "filters": 121,
     "kernel_size": 10,
+
     "stride": 5,
     "eval_stride": 1,
     "encoder_padding": "same",
