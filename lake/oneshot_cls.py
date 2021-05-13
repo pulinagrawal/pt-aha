@@ -47,7 +47,9 @@ def main():
   with open(args.config) as config_file:
     config = json.load(config_file)
 
-  utils.set_seed(config['seed'])
+  seed = config['seed']
+  utils.set_seed(seed)
+  np.random.seed(seed)
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -187,31 +189,22 @@ def main():
   # ---------------------------------------------------------------------------
   print('-------- Few-shot Evaluation (Study and Recall) ---------')
 
+  # Prepare data loaders
   if dataset_name == 'Omniglot':
-    # Prepare data loaders
-    study_loader = torch.utils.data.DataLoader(
-        OmniglotOneShotDataset('./data', train=True, download=True,
-                               transform=image_tfms, target_transform=None),
-        batch_size=config['study_batch_size'], shuffle=False)
-
-    recall_loader = torch.utils.data.DataLoader(
-        OmniglotOneShotDataset('./data', train=False, download=True,
-                               transform=image_tfms, target_transform=None),
-        batch_size=config['study_batch_size'], shuffle=False)
+    study_dataset = OmniglotOneShotDataset('./data', train=True, download=True,
+                               transform=image_tfms, target_transform=None)
+    recall_dataset = OmniglotOneShotDataset('./data', train=False, download=True,
+                               transform=image_tfms, target_transform=None)
   
   elif dataset_name == 'CIFAR':
-    np.random.seed(28)
     rand_class = np.random.randint(low=0, high=64, size=20)  # array of 20 random integers to select classes
+    study_dataset = CifarOneShotDataset('./data', mode='train', transform=image_tfms, target_transform=None,
+                        classes=rand_class, download=False)
+    recall_dataset = CifarOneShotDataset('./data', mode='test', transform=image_tfms, target_transform=None,
+                        classes=rand_class, download=False)
 
-    study_loader = torch.utils.data.DataLoader(
-      CifarOneShotDataset('./data', mode='train', transform=image_tfms, target_transform=None,
-                          classes=rand_class, download=False),
-      batch_size=config['study_batch_size'], shuffle=False)
-
-    recall_loader = torch.utils.data.DataLoader(
-      CifarOneShotDataset('./data', mode='test', transform=image_tfms, target_transform=None,
-                          classes=rand_class, download=False),
-      batch_size=config['study_batch_size'], shuffle=False)
+  study_loader = torch.utils.data.DataLoader(study_dataset, batch_size=config['study_batch_size'], shuffle=False)
+  recall_loader = torch.utils.data.DataLoader(recall_dataset, batch_size=config['study_batch_size'], shuffle=False)
 
   assert len(study_loader) == len(recall_loader)
 
