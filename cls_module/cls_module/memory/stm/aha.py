@@ -61,9 +61,38 @@ def dg_to_pc(tensor):
   tensor[tensor == 0] = -1
   return tensor
 
+def is_hebbian_perforant(self):
+  k = 'hebbian_perforant'
+  if k in self.config and self.config[k]:
+    return True
+  else:
+    return False
+    
 
 class AHA(MemoryInterface):
-  """An implementation of a short-term memory module using a AHA."""
+  """
+  An implementation of a short-term memory module using a AHA.
+
+    There are two major modes. 
+    1) Standard CLS, with Hebbian learning in the perforant path
+  
+    Build:
+    DG -> CA3: set of weights (randomly initialised)
+    EC -> CA3: set of weights (randomly initialised)
+
+    Forward:
+    Propagate
+    Update weights given pre and post synaptic activity
+
+    2) Our approach, with error driven learning in perforant pathconf 
+    Build:
+    DG -> CA3: 1 to 1 clamp
+    EC -> CA3 = PR network
+
+    Forward:
+    Propagate
+    PR: BP Optimization step over
+  """
 
   global_key = 'stm'
   local_key = 'aha'
@@ -108,30 +137,7 @@ class AHA(MemoryInterface):
         module_optimizer.state = defaultdict(dict)
 
   def build(self):
-    """
-    Build AHA as short-term memory module.
-    
-     There are two major modes. 
-     1) Standard CLS, with Hebbian learning in the perforant path
-    
-     Build:
-     DG -> CA3: set of weights (randomly initialised)
-     EC -> CA3: set of weights (randomly initialised)
-
-     Forward:
-     Propagate
-     Update weights given pre and post synaptic activity
-
-     2) Our approach, with error driven learning in perforant pathconf 
-     Build:
-     DG -> CA3: 1 to 1 clamp
-     EC -> CA3 = PR network
-
-     Forward:
-     Propagate
-     PR: BP Optimization step over
-
-    """
+    """Build AHA as short-term memory module."""
 
     # Build the Pattern Separation (PS) module
     ps_output_shape = self.build_ps(ps_config=self.config['ps'], ps_input_shape=self.input_shape)
@@ -362,11 +368,13 @@ class AHA(MemoryInterface):
     losses['pm_ec'], outputs['pm_ec'] = self.forward_ae(name='pm_ec', inputs=outputs['pc'], targets=targets)
 
     # 
-    if self.hebbian_perforant:
+    if self.is_hebbian_perforant():
       pass
       # dw = dg.ca3    outputs[ps]  outputs[pc]     --> build: single set of weights (doesn't currently exist, because activations are copied across), PC must be initialised with random weights
       # dw = ec.ca3    inputs       outputs[pc]     --> build: pr is just a single set of weights
 
+      # use update rule from CLS (Norman2003, Ketz2013) (variant of Oja rule)
+      # dw = y(x - w)
 
     outputs['encoding'] = outputs['pc'].detach()
     outputs['decoding'] = outputs['pm']['decoding'].detach()
