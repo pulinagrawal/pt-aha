@@ -79,6 +79,7 @@ class AHA(MemoryInterface):
     Build:
     DG -> CA3: set of weights (randomly initialised)
     EC -> CA3: set of weights (randomly initialised)
+    For CA3 neurons, it's a weighted sum from two sets of weights.
 
     Forward:
     Propagate
