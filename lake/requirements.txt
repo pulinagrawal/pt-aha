@@ -4,3 +4,5 @@ matplotlib
 tensorboard
 imageio
 h5py
+tqdm
+torchmeta
