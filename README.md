@@ -1,11 +1,13 @@
 # AHA in PyTorch
 
 ## Requirements
+
 - PyTorch 1.5.1+
-    - Follow instructions here to set it up locally (depends on your environment)
+  - Follow instructions here to set it up locally (depends on your environment)
 - [cerenaut-pt-core](https://github.com/Cerenaut/cerenaut-pt-core) - Cerenaut's PyTorch core codebase
 
 ## Getting Started
+
 First, you need to setup the CLS module before using it with any of the available frameworks.
 
 1. Change into the `cls_module` directory
@@ -14,8 +16,13 @@ First, you need to setup the CLS module before using it with any of the availabl
 ## Frameworks
 
 ### Omniglot Lake Benchmark
+
 This is an implementation of the one-shot generalization benchmark introduced by Lake. The code is available under the
 directory `lake`.
+
+Before you run the Lake benchmark, you will also have to install dependencies specific to this particular framework. All dependencies are listed inside `requirements.txt` inside the `lake/` directory.
+
+You can install the dependencies using `pip install -r requirements.txt`.
 
 To run an experiment using the Lake framework, you will need a valid configuration file. There is an existing configuration
 file located in `lake/definitions/aha_config.json` with the default configuration.
