@@ -4,6 +4,8 @@ import logging
 from collections import defaultdict
 from os import pathconf
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -13,7 +15,8 @@ from cls_module.memory.interface import MemoryInterface
 from cls_module.components.dg import DG
 from cerenaut_pt_core.components.simple_autoencoder import SimpleAutoencoder
 from cerenaut_pt_core.utils import build_topk_mask
-
+from cls_module.components.local_optimizer import LocalOptim
+from cls_module.components.learning_rules import PureHebbRule
 
 def pc_to_unit(tensor):
   """
@@ -61,13 +64,6 @@ def dg_to_pc(tensor):
   tensor[tensor == 0] = -1
   return tensor
 
-def is_hebbian_perforant(self):
-  k = 'hebbian_perforant'
-  if k in self.config and self.config[k]:
-    return True
-  else:
-    return False
-    
 
 class AHA(MemoryInterface):
   """
@@ -85,7 +81,7 @@ class AHA(MemoryInterface):
     Propagate
     Update weights given pre and post synaptic activity
 
-    2) Our approach, with error driven learning in perforant pathconf 
+    2) Our approach, with error driven learning in perforant pathconf
     Build:
     DG -> CA3: 1 to 1 clamp
     EC -> CA3 = PR network
@@ -97,6 +93,13 @@ class AHA(MemoryInterface):
 
   global_key = 'stm'
   local_key = 'aha'
+
+  def is_hebbian_perforant(self):
+    k = 'hebbian_perforant'
+    if k in self.config and self.config[k]:
+      return True
+
+    return False
 
   def reset(self):
     """Reset modules and optimizers."""
@@ -263,7 +266,32 @@ class AHA(MemoryInterface):
 
   def build_pc(self, pc_config, pc_input_shape):
     """Builds the Pattern Completion (PC) module."""
-    del pc_config
+
+    if self.is_hebbian_perforant():
+      # Builds single set of weights (doesn't currently exist, because activations are copied across)
+      # PC must be initialised with random weights
+      ec_size = np.prod(self.input_shape[1:])
+      ps_size = np.prod(pc_input_shape[1:])
+
+      dg_ca3 = torch.nn.Linear(ps_size, ps_size, bias=False).to(self.device)
+      dg_ca3.weight.requires_grad = False
+      nn.init.uniform_(dg_ca3.weight)
+
+      dg_ca3_optimizer = LocalOptim(dg_ca3.named_parameters(), lr=pc_config['learning_rate'])
+
+      self.add_module('dg_ca3', dg_ca3)
+      self.add_optimizer('dg_ca3', dg_ca3_optimizer)
+
+      ec_ca3 = torch.nn.Linear(ec_size, ps_size, bias=False).to(self.device)
+      ec_ca3.weight.requires_grad = False
+      nn.init.uniform_(ec_ca3.weight)
+
+      ec_ca3_optimizer = LocalOptim(ec_ca3.named_parameters(), lr=pc_config['learning_rate'])
+
+      self.add_module('ec_ca3', ec_ca3)
+      self.add_optimizer('ec_ca3', ec_ca3_optimizer)
+
+      self.learning_rule = PureHebbRule()
 
     # Initialise the buffer
     self.pc_buffer = None
@@ -354,28 +382,48 @@ class AHA(MemoryInterface):
     overlap = self.ps.compute_overlap(outputs['ps'])
     losses['ps_overlap'] = overlap.sum()
 
-    pr_targets = outputs['ps'] if self.training else self.pc_buffer_batch
-    losses['pr'], outputs['pr'] = self.forward_pr(inputs=inputs, targets=pr_targets)
+    # Perforant Pathway: Hebbian Learning
+    if self.is_hebbian_perforant():
+      dg_ca3_in = outputs['ps']
+      dg_ca3_out = self.dg_ca3(dg_ca3_in)
 
-    # Compute PR Mismatch
-    pr_out = outputs['pr']['pr_out']
-    pr_batch_size = pr_out.shape[0]
-    losses['pr_mismatch'] = torch.sum(torch.abs(pr_targets - pr_out)) / pr_batch_size
+      ec_ca3_in = torch.flatten(inputs, 1)
+      ec_ca3_out = self.ec_ca3(ec_ca3_in)
 
-    pc_cue = outputs['ps'] if self.training else outputs['pr']['z_cue']
-    outputs['pc'] = self.forward_pc(inputs=pc_cue)
+      pc_out = dg_ca3_out + ec_ca3_out
+
+      if self.training:
+        # Update DG:CA3 with respect to dg_ca3_in (i.e. outputs['ps'])
+        print('Updating DG:CA3...')
+        d_dg_ca3 = self.learning_rule.update(dg_ca3_in, pc_out, self.dg_ca3.weight)
+        d_dg_ca3 = d_dg_ca3.view(*self.dg_ca3.weight.size())
+        self.dg_ca3_optimizer.local_step(d_dg_ca3)
+
+        # Update EC:CA3 with respect to ec_ca3_in (i.e. inputs)
+        print('Updating EC:CA3...')
+        d_ec_ca3 = self.learning_rule.update(ec_ca3_in, pc_out, self.ec_ca3.weight)
+        d_ec_ca3 = d_ec_ca3.view(*self.ec_ca3.weight.size())
+        self.ec_ca3_optimizer.local_step(d_ec_ca3)
+
+      outputs['pc'] = pc_out.detach()
+
+    # Perforant Pathway: Error-Driven Learning
+    if not self.is_hebbian_perforant():
+      losses['pr'], outputs['pr'] = self.forward_pr_hebbian(inputs=inputs, targets=None)
+
+      pr_targets = outputs['ps'] if self.training else self.pc_buffer_batch
+      losses['pr'], outputs['pr'] = self.forward_pr(inputs=inputs, targets=pr_targets)
+
+      # Compute PR Mismatch
+      pr_out = outputs['pr']['pr_out']
+      pr_batch_size = pr_out.shape[0]
+      losses['pr_mismatch'] = torch.sum(torch.abs(pr_targets - pr_out)) / pr_batch_size
+
+      pc_cue = outputs['ps'] if self.training else outputs['pr']['z_cue']
+      outputs['pc'] = self.forward_pc(inputs=pc_cue)
 
     losses['pm'], outputs['pm'] = self.forward_ae(name='pm', inputs=outputs['pc'], targets=targets)
     losses['pm_ec'], outputs['pm_ec'] = self.forward_ae(name='pm_ec', inputs=outputs['pc'], targets=targets)
-
-    # 
-    if self.is_hebbian_perforant():
-      pass
-      # dw = dg.ca3    outputs[ps]  outputs[pc]     --> build: single set of weights (doesn't currently exist, because activations are copied across), PC must be initialised with random weights
-      # dw = ec.ca3    inputs       outputs[pc]     --> build: pr is just a single set of weights
-
-      # use update rule from CLS (Norman2003, Ketz2013) (variant of Oja rule)
-      # dw = y(x - w)
 
     outputs['encoding'] = outputs['pc'].detach()
     outputs['decoding'] = outputs['pm']['decoding'].detach()
