@@ -41,7 +41,7 @@ class CLS(nn.Module):
     self.build()
 
     self.features = {}
-    self.stm_modes = ['study', 'recall']
+    self.stm_modes = ['study', 'study_validate', 'recall']
 
     for mode in self.stm_modes:
       self.features[mode] = {}
@@ -182,6 +182,9 @@ class CLS(nn.Module):
   def memorise(self, inputs, labels):
     return self.forward(inputs, labels, mode='study')
 
+  def memorise_test(self, inputs, labels):
+    return self.forward(inputs, labels, mode='study-test')
+
   def recall(self, inputs, labels):
     return self.forward(inputs, labels, mode='recall')
 
@@ -215,6 +218,11 @@ class CLS(nn.Module):
       self.train()
       self.freeze([self.ltm_key])
 
+    # Freeze LTM during stm validation
+    elif mode == 'study_validate':
+      self.eval()
+      self.freeze([self.ltm_key])
+
     # Freeze ALL during recall
     elif mode == 'recall':
       self.eval()
@@ -235,7 +243,7 @@ class CLS(nn.Module):
       softmax_preds = F.softmax(preds, dim=1).argmax(dim=1)
       accuracies[self.ltm_key] = torch.eq(softmax_preds, labels).data.cpu().float().mean()
 
-    if mode in ['study', 'recall']:
+    if mode in ['study','study_validate', 'recall']:
       next_input = outputs[self.ltm_key]['memory']['output'].detach()  # Ensures no gradients pass through modules
 
       # iterate EC
