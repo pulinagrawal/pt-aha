@@ -259,19 +259,20 @@ def main():
                                   comparison_type=comparison_type)
 
       # PR Accuracy (study first) - this is the version used in the paper
-      oneshot_metrics.compare(prefix='pr_sf_',
-                              primary_features=model.features['study']['stm_pr'],
-                              primary_labels=model.features['study']['labels'],
-                              secondary_features=model.features['recall']['stm_pr'],
-                              secondary_labels=model.features['recall']['labels'],
-                              comparison_type='match_mse')
+      if 'stm_pr' in model.features['study']:
+        oneshot_metrics.compare(prefix='pr_sf_',
+                                primary_features=model.features['study']['stm_pr'],
+                                primary_labels=model.features['study']['labels'],
+                                secondary_features=model.features['recall']['stm_pr'],
+                                secondary_labels=model.features['recall']['labels'],
+                                comparison_type='match_mse')
 
-      # oneshot_metrics.compare(prefix='pr_rf_',
-      #                         primary_features=model.features['recall']['stm_pr'],
-      #                         primary_labels=model.features['recall']['labels'],
-      #                         secondary_features=model.features['study']['stm_pr'],
-      #                         secondary_labels=model.features['study']['labels'],
-      #                         comparison_type='match_mse')
+        # oneshot_metrics.compare(prefix='pr_rf_',
+        #                         primary_features=model.features['recall']['stm_pr'],
+        #                         primary_labels=model.features['recall']['labels'],
+        #                         secondary_features=model.features['study']['stm_pr'],
+        #                         secondary_labels=model.features['study']['labels'],
+        #                         comparison_type='match_mse')
 
 
       oneshot_metrics.report()
@@ -291,7 +292,11 @@ def main():
       for name in summary_names:
         mode_key, feature_key = name.split('_', 1)
 
+        if not feature_key in model.features[mode_key]:
+          continue
+
         summary_features = model.features[mode_key][feature_key]
+
         if len(summary_features.shape) > 2:
           summary_features = summary_features.permute(0, 2, 3, 1)
 

@@ -39,15 +39,16 @@ class PureHebbRule(LearningRule):
     super().__init__()
 
   def update(self, inputs, targets, w):
-    d_ws = torch.zeros(inputs.size(0), *w.shape).to(w.device)
+    inputs_tiled = inputs.unsqueeze(-1)
+    inputs_tiled = inputs_tiled.repeat((1, 1, targets.size(1))).transpose(2, 1)
 
-    for idx, (x, y) in enumerate(zip(inputs, targets)):
-      d_w = torch.zeros(w.shape)
-      for i in range(y.shape[0]):
-        for j in range(x.shape[0]):
-          d_w[i, j] = y[i] * (x[j] - w[i, j])
+    targets_tiled = targets.unsqueeze(-1)
+    targets_tiled = targets_tiled.repeat((1, 1, inputs.size(1)))
 
-      d_ws[idx] = d_w
+    w_tiled = w.unsqueeze(0)
+    w_tiled = w_tiled.repeat((inputs.size(0), 1, 1))
+
+    d_ws = targets_tiled * (inputs_tiled - w_tiled)
 
     return torch.mean(d_ws, dim=0)
 

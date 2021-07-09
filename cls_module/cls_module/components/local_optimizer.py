@@ -19,7 +19,6 @@ class LocalOptim(Optimizer):
     for group in self.param_groups:
       layer_index = self.param_names.index('weight')
       p = group['params'][layer_index]
-      print(p.device, d_p.device)
       p.data.add_(group['lr'] * d_p)
 
     try:

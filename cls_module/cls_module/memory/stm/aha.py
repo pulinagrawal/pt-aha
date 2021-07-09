@@ -65,6 +65,31 @@ def dg_to_pc(tensor):
   return tensor
 
 
+class LocalConnection(nn.Linear):
+  def __init__(self, input_features, output_features, bias=False):
+    super(LocalConnection, self).__init__(input_features, output_features, bias)
+
+    self.weight.requires_grad = False
+
+    if bias:
+      self.bias.requires_grad = False
+
+    self.reset_parameters()
+
+  def reset_parameters(self):
+    def custom_weight_init(m):
+      if not isinstance(m, (nn.Linear, nn.Conv2d, nn.ConvTranspose2d)):
+        return
+
+      if m.weight is not None:
+        nn.init.uniform_(m.weight)
+
+      if m.bias is not None:
+        nn.init.zeros_(m.bias)
+
+    self.apply(custom_weight_init)
+
+
 class AHA(MemoryInterface):
   """
   An implementation of a short-term memory module using a AHA.
@@ -121,6 +146,14 @@ class AHA(MemoryInterface):
         'pm': {
             'params': True,
             'optim': True
+        },
+        'dg_ca3': {
+            'params': True,
+            'optim': True
+        },
+        'ec_ca3': {
+            'params': True,
+            'optim': True
         }
     }
 
@@ -130,13 +163,13 @@ class AHA(MemoryInterface):
 
       # Reset the module parameters
       if hasattr(module, 'reset_parameters') and resets[name]['params']:
-        # print(name, '=>', 'resetting parameters')
+        print(name, '=>', 'resetting parameters')
         module.reset_parameters()
 
       # Reset the module optimizer
       optimizer_name = name + '_optimizer'
       if hasattr(self, optimizer_name) and resets[name]['optim']:
-        # print(name, '=>', 'resetting optimizer')
+        print(name, '=>', 'resetting optimizer')
         module_optimizer = getattr(self, optimizer_name)
         module_optimizer.state = defaultdict(dict)
 
@@ -273,19 +306,14 @@ class AHA(MemoryInterface):
       ec_size = np.prod(self.input_shape[1:])
       ps_size = np.prod(pc_input_shape[1:])
 
-      dg_ca3 = torch.nn.Linear(ps_size, ps_size, bias=False).to(self.device)
-      dg_ca3.weight.requires_grad = False
-      nn.init.uniform_(dg_ca3.weight)
-
+      dg_ca3 = LocalConnection(ps_size, ps_size, bias=False).to(self.device)
+      print(dg_ca3.named_parameters())
       dg_ca3_optimizer = LocalOptim(dg_ca3.named_parameters(), lr=pc_config['learning_rate'])
 
       self.add_module('dg_ca3', dg_ca3)
       self.add_optimizer('dg_ca3', dg_ca3_optimizer)
 
-      ec_ca3 = torch.nn.Linear(ec_size, ps_size, bias=False).to(self.device)
-      ec_ca3.weight.requires_grad = False
-      nn.init.uniform_(ec_ca3.weight)
-
+      ec_ca3 = LocalConnection(ec_size, ps_size, bias=False).to(self.device)
       ec_ca3_optimizer = LocalOptim(ec_ca3.named_parameters(), lr=pc_config['learning_rate'])
 
       self.add_module('ec_ca3', ec_ca3)
@@ -375,8 +403,10 @@ class AHA(MemoryInterface):
 
     losses = {}
     outputs = {}
+    features = {}
 
     outputs['ps'] = self.forward_ps(inputs)
+    features['ps'] = outputs['ps'].detach().cpu()
 
     # Compute DG Overlap
     overlap = self.ps.compute_overlap(outputs['ps'])
@@ -384,35 +414,43 @@ class AHA(MemoryInterface):
 
     # Perforant Pathway: Hebbian Learning
     if self.is_hebbian_perforant():
-      dg_ca3_in = outputs['ps']
-      dg_ca3_out = self.dg_ca3(dg_ca3_in)
+      with torch.no_grad():
+        dg_ca3_in = outputs['ps']
+        pre_dg_ca3_out = self.dg_ca3(dg_ca3_in)
 
-      ec_ca3_in = torch.flatten(inputs, 1)
-      ec_ca3_out = self.ec_ca3(ec_ca3_in)
+        ec_ca3_in = torch.flatten(inputs, 1)
+        pre_ec_ca3_out = self.ec_ca3(ec_ca3_in)
 
-      pc_out = dg_ca3_out + ec_ca3_out
+        pre_pc_out = pre_dg_ca3_out + pre_ec_ca3_out
+        outputs['pc'] = pre_pc_out
 
-      if self.training:
-        # Update DG:CA3 with respect to dg_ca3_in (i.e. outputs['ps'])
-        print('Updating DG:CA3...')
-        d_dg_ca3 = self.learning_rule.update(dg_ca3_in, pc_out, self.dg_ca3.weight)
-        d_dg_ca3 = d_dg_ca3.view(*self.dg_ca3.weight.size())
-        self.dg_ca3_optimizer.local_step(d_dg_ca3)
+        if self.training:
+          # Update DG:CA3 with respect to dg_ca3_in (i.e. outputs['ps'])
+          d_dg_ca3 = self.learning_rule.update(dg_ca3_in, pre_pc_out, self.dg_ca3.weight)
+          d_dg_ca3 = d_dg_ca3.view(*self.dg_ca3.weight.size())
+          self.dg_ca3_optimizer.local_step(d_dg_ca3)
 
-        # Update EC:CA3 with respect to ec_ca3_in (i.e. inputs)
-        print('Updating EC:CA3...')
-        d_ec_ca3 = self.learning_rule.update(ec_ca3_in, pc_out, self.ec_ca3.weight)
-        d_ec_ca3 = d_ec_ca3.view(*self.ec_ca3.weight.size())
-        self.ec_ca3_optimizer.local_step(d_ec_ca3)
+          # Update EC:CA3 with respect to ec_ca3_in (i.e. inputs)
+          d_ec_ca3 = self.learning_rule.update(ec_ca3_in, pre_pc_out, self.ec_ca3.weight)
+          d_ec_ca3 = d_ec_ca3.view(*self.ec_ca3.weight.size())
+          self.ec_ca3_optimizer.local_step(d_ec_ca3)
 
-      outputs['pc'] = pc_out.detach()
+        post_dg_ca3_out = self.dg_ca3(dg_ca3_in)
+        post_ec_ca3_out = self.ec_ca3(ec_ca3_in)
+
+        post_pc_out = post_ec_ca3_out + post_ec_ca3_out
+
+        losses['dg_ca3'] = F.mse_loss(pre_dg_ca3_out, post_dg_ca3_out)
+        losses['ec_ca3'] = F.mse_loss(pre_ec_ca3_out, post_ec_ca3_out)
+        losses['pc'] = F.mse_loss(pre_pc_out, post_pc_out)
+
+        print('pc_loss', losses['pc'])
 
     # Perforant Pathway: Error-Driven Learning
     if not self.is_hebbian_perforant():
-      losses['pr'], outputs['pr'] = self.forward_pr_hebbian(inputs=inputs, targets=None)
-
       pr_targets = outputs['ps'] if self.training else self.pc_buffer_batch
       losses['pr'], outputs['pr'] = self.forward_pr(inputs=inputs, targets=pr_targets)
+      features['pr'] = outputs['pr']['pr_out'].detach().cpu()
 
       # Compute PR Mismatch
       pr_out = outputs['pr']['pr_out']
@@ -430,13 +468,10 @@ class AHA(MemoryInterface):
     outputs['decoding_ec'] = outputs['pm_ec']['decoding'].detach()
     outputs['output'] = outputs['pc'].detach()
 
-    self.features = {
-        'ps': outputs['ps'].detach().cpu(),
-        'pr': outputs['pr']['pr_out'].detach().cpu(),
-        'pc': outputs['pc'].detach().cpu(),
+    features['pc'] = outputs['pc'].detach().cpu()
+    features['recon'] = outputs['pm']['decoding'].detach().cpu()
+    features['recon_ec'] =  outputs['pm_ec']['decoding'].detach().cpu()
 
-        'recon': outputs['pm']['decoding'].detach().cpu(),
-        'recon_ec': outputs['pm_ec']['decoding'].detach().cpu()
-    }
+    self.features = features
 
     return losses, outputs
