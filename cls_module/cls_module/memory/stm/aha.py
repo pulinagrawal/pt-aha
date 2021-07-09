@@ -307,7 +307,6 @@ class AHA(MemoryInterface):
       ps_size = np.prod(pc_input_shape[1:])
 
       dg_ca3 = LocalConnection(ps_size, ps_size, bias=False).to(self.device)
-      print(dg_ca3.named_parameters())
       dg_ca3_optimizer = LocalOptim(dg_ca3.named_parameters(), lr=pc_config['learning_rate'])
 
       self.add_module('dg_ca3', dg_ca3)
