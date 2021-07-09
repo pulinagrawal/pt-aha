@@ -163,13 +163,13 @@ class AHA(MemoryInterface):
 
       # Reset the module parameters
       if hasattr(module, 'reset_parameters') and resets[name]['params']:
-        print(name, '=>', 'resetting parameters')
+        # print(name, '=>', 'resetting parameters')
         module.reset_parameters()
 
       # Reset the module optimizer
       optimizer_name = name + '_optimizer'
       if hasattr(self, optimizer_name) and resets[name]['optim']:
-        print(name, '=>', 'resetting optimizer')
+        # print(name, '=>', 'resetting optimizer')
         module_optimizer = getattr(self, optimizer_name)
         module_optimizer.state = defaultdict(dict)
 
@@ -443,7 +443,7 @@ class AHA(MemoryInterface):
         losses['dg_ca3'] = F.mse_loss(pre_dg_ca3_out, post_dg_ca3_out)
         losses['ec_ca3'] = F.mse_loss(pre_ec_ca3_out, post_ec_ca3_out)
         losses['pc'] = F.mse_loss(pre_pc_out, post_pc_out)
-        
+
     # Perforant Pathway: Error-Driven Learning
     if not self.is_hebbian_perforant():
       pr_targets = outputs['ps'] if self.training else self.pc_buffer_batch
