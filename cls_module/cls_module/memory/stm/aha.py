@@ -443,9 +443,7 @@ class AHA(MemoryInterface):
         losses['dg_ca3'] = F.mse_loss(pre_dg_ca3_out, post_dg_ca3_out)
         losses['ec_ca3'] = F.mse_loss(pre_ec_ca3_out, post_ec_ca3_out)
         losses['pc'] = F.mse_loss(pre_pc_out, post_pc_out)
-
-        print('pc_loss', losses['pc'])
-
+        
     # Perforant Pathway: Error-Driven Learning
     if not self.is_hebbian_perforant():
       pr_targets = outputs['ps'] if self.training else self.pc_buffer_batch
