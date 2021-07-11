@@ -165,7 +165,7 @@ def main():
           with torch.no_grad():
             for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
 
-              if 0 > MAX_VAL_STEPS > batch_idx_val:   ##### y esto pa que!
+              if batch_idx_val >= MAX_VAL_STEPS:
                 print("\tval batch steps, {}, has exceeded max of {}.".format(batch_idx_val, MAX_VAL_STEPS))
                 break
 
@@ -205,7 +205,7 @@ def main():
   study_loader = torch.utils.data.DataLoader(study_dataset, batch_size=config['study_batch_size'], shuffle=False)
   recall_loader = torch.utils.data.DataLoader(recall_dataset, batch_size=config['study_batch_size'], shuffle=False)
 
-  assert len(study_loader)==len(recall_loader)
+  assert len(study_loader) == len(recall_loader)
 
   oneshot_dataset = enumerate(zip(study_loader, recall_loader))
 

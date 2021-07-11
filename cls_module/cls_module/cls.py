@@ -243,7 +243,7 @@ class CLS(nn.Module):
       softmax_preds = F.softmax(preds, dim=1).argmax(dim=1)
       accuracies[self.ltm_key] = torch.eq(softmax_preds, labels).data.cpu().float().mean()
 
-    if mode in ['study','study_validate', 'recall']:
+    if mode in ['study', 'study_validate', 'recall']:
       next_input = outputs[self.ltm_key]['memory']['output'].detach()  # Ensures no gradients pass through modules
 
       # iterate EC
