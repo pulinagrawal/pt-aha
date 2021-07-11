@@ -150,7 +150,6 @@ def main():
           break
 
         data, target = data.to(device), target.to(device)
-
         losses, _ = model(data, labels=target if model.is_ltm_supervised() else None, mode='pretrain')
         pretrain_loss = losses['ltm']['memory']['loss'].item()
 
@@ -166,7 +165,7 @@ def main():
           with torch.no_grad():
             for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
 
-              if 0 > MAX_VAL_STEPS > batch_idx_val:
+              if 0 > MAX_VAL_STEPS > batch_idx_val:   ##### y esto pa que!
                 print("\tval batch steps, {}, has exceeded max of {}.".format(batch_idx_val, MAX_VAL_STEPS))
                 break
 
@@ -206,7 +205,7 @@ def main():
   study_loader = torch.utils.data.DataLoader(study_dataset, batch_size=config['study_batch_size'], shuffle=False)
   recall_loader = torch.utils.data.DataLoader(recall_dataset, batch_size=config['study_batch_size'], shuffle=False)
 
-  assert len(study_loader) == len(recall_loader)
+  assert len(study_loader)==len(recall_loader)
 
   oneshot_dataset = enumerate(zip(study_loader, recall_loader))
 
@@ -232,7 +231,15 @@ def main():
     # Study
     # --------------------------------------------------------------------------
     for step in range(config['study_steps']):
-      model(study_data, study_target, mode='study')
+      study_train_losses, _ = model(study_data, study_target, mode='study')
+      study_train_loss = study_train_losses['stm']['memory']['loss']
+
+      print('Losses step {}, ite {}: \t PR:{:.6f}\
+      PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
+                                                      study_train_loss['pr'].item(),
+                                                      study_train_loss['pr_mismatch'].item(),
+                                                      study_train_loss['pm_ec'].item()))
+      model(recall_data, recall_target, mode='study_validate')
 
     # Recall
     # --------------------------------------------------------------------------
