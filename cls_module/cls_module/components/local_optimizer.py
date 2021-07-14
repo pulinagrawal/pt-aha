@@ -5,25 +5,20 @@ class LocalOptim(Optimizer):
     self.param_names, params = zip(*named_params)
 
     if lr is not required and lr < 0.0:
-        raise ValueError("Invalid learning rate: {}".format(lr))
+      raise ValueError("Invalid learning rate: {}".format(lr))
 
     defaults = dict(lr=lr)
     super(LocalOptim, self).__init__(params, defaults)
 
-  def local_step(self, d_p, closure=None):
+  def local_step(self, param_delta):
     """Performs a single local optimization step."""
-    loss = None
-    if closure is not None:
-      loss = closure()
-
     for group in self.param_groups:
       layer_index = self.param_names.index('weight')
-      p = group['params'][layer_index]
-      p.data.add_(group['lr'] * d_p)
+      layer = group['params'][layer_index]
+
+      layer.data.add_(group['lr'] * param_delta)
 
     try:
       self._step_count += 1
     except AttributeError:
       pass
-
-    return loss
