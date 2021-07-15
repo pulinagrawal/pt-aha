@@ -16,7 +16,7 @@ from cls_module.components.dg import DG
 from cerenaut_pt_core.components.simple_autoencoder import SimpleAutoencoder
 from cerenaut_pt_core.utils import build_topk_mask
 from cls_module.components.local_optimizer import LocalOptim
-from cls_module.components.learning_rules import PureHebbRule
+from cls_module.components.learning_rules import OjaLeabraRule
 
 def pc_to_unit(tensor):
   """
@@ -318,7 +318,7 @@ class AHA(MemoryInterface):
       self.add_module('ec_ca3', ec_ca3)
       self.add_optimizer('ec_ca3', ec_ca3_optimizer)
 
-      self.learning_rule = PureHebbRule()
+      self.learning_rule = OjaLeabraRule()
 
     # Initialise the buffer
     self.pc_buffer = None
@@ -420,28 +420,28 @@ class AHA(MemoryInterface):
         ec_ca3_in = torch.flatten(inputs, 1)
         pre_ec_ca3_out = self.ec_ca3(ec_ca3_in)
 
-        pre_pc_out = pre_dg_ca3_out + pre_ec_ca3_out
-        outputs['pc'] = pre_pc_out
+        pre_pc_cue = pre_dg_ca3_out + pre_ec_ca3_out
+        pc_cue = pre_pc_cue
 
         if self.training:
           # Update DG:CA3 with respect to dg_ca3_in (i.e. outputs['ps'])
-          d_dg_ca3 = self.learning_rule.update(dg_ca3_in, pre_pc_out, self.dg_ca3.weight)
+          d_dg_ca3 = self.learning_rule.compute_dw(dg_ca3_in, pre_pc_cue, self.dg_ca3.weight)
           d_dg_ca3 = d_dg_ca3.view(*self.dg_ca3.weight.size())
           self.dg_ca3_optimizer.local_step(d_dg_ca3)
 
           # Update EC:CA3 with respect to ec_ca3_in (i.e. inputs)
-          d_ec_ca3 = self.learning_rule.update(ec_ca3_in, pre_pc_out, self.ec_ca3.weight)
+          d_ec_ca3 = self.learning_rule.compute_dw(ec_ca3_in, pre_pc_cue, self.ec_ca3.weight)
           d_ec_ca3 = d_ec_ca3.view(*self.ec_ca3.weight.size())
           self.ec_ca3_optimizer.local_step(d_ec_ca3)
 
+        # Compute the post synaptic activity for loss calculation
         post_dg_ca3_out = self.dg_ca3(dg_ca3_in)
         post_ec_ca3_out = self.ec_ca3(ec_ca3_in)
-
-        post_pc_out = post_ec_ca3_out + post_ec_ca3_out
+        post_pc_cue = post_ec_ca3_out + post_ec_ca3_out
 
         losses['dg_ca3'] = F.mse_loss(pre_dg_ca3_out, post_dg_ca3_out)
         losses['ec_ca3'] = F.mse_loss(pre_ec_ca3_out, post_ec_ca3_out)
-        losses['pc'] = F.mse_loss(pre_pc_out, post_pc_out)
+        losses['pc_cue'] = F.mse_loss(pre_pc_cue, post_pc_cue)
 
     # Perforant Pathway: Error-Driven Learning
     if not self.is_hebbian_perforant():
@@ -455,7 +455,8 @@ class AHA(MemoryInterface):
       losses['pr_mismatch'] = torch.sum(torch.abs(pr_targets - pr_out)) / pr_batch_size
 
       pc_cue = outputs['ps'] if self.training else outputs['pr']['z_cue']
-      outputs['pc'] = self.forward_pc(inputs=pc_cue)
+
+    outputs['pc'] = self.forward_pc(inputs=pc_cue)
 
     losses['pm'], outputs['pm'] = self.forward_ae(name='pm', inputs=outputs['pc'], targets=targets)
     losses['pm_ec'], outputs['pm_ec'] = self.forward_ae(name='pm_ec', inputs=outputs['pc'], targets=targets)
