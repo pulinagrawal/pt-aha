@@ -1,0 +1,8 @@
+{
+  "seed": 42,
+  "characters": 8,
+  "sequence_length": 100,
+  "data_path": "~/data/omniglot-py/images_background/",
+  "alphabet": "latin"
+
+}
