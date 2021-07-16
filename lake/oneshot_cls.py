@@ -19,8 +19,9 @@ from cls_module.cls import CLS
 import utils
 
 
-from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDataset
-from cifar_one_shot_dataset import CifarTransformation, CifarOneShotDataset
+from datasets.omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDataset
+from datasets.omniglot_instance_dataset import OmniglotInstanceDataset
+from datasets.cifar_one_shot_dataset import CifarTransformation, CifarOneShotDataset
 from oneshot_metrics import OneshotMetrics
 
 LOG_EVERY = 20
@@ -56,7 +57,7 @@ def main():
 
   dataset_name = config.get('dataset')
 
-  if dataset_name == 'Omniglot':
+  if dataset_name == 'Omniglot' or dataset_name == 'Omniglot-Instance':
     image_tfms = transforms.Compose([
         transforms.ToTensor(),
         OmniglotTransformation(resize_factor=config['image_resize_factor'])
@@ -194,7 +195,14 @@ def main():
                                transform=image_tfms, target_transform=None)
     recall_dataset = OmniglotOneShotDataset('./data', train=False, download=True,
                                transform=image_tfms, target_transform=None)
-  
+
+  if dataset_name == 'Omniglot-Instance':
+    study_dataset = OmniglotInstanceDataset('./data', train=True, download=True,
+                               transform=image_tfms, target_transform=None)
+    recall_dataset = OmniglotInstanceDataset('./data', train=False, download=True,
+                               transform=image_tfms, target_transform=None)
+
+
   elif dataset_name == 'CIFAR':
     rand_class = np.random.randint(low=0, high=64, size=20)  # array of 20 random integers to select classes
     study_dataset = CifarOneShotDataset('./data', mode='train', transform=image_tfms, target_transform=None,

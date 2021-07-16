@@ -8,7 +8,7 @@ from PIL import Image
 import torchvision
 from torch.utils.data import Dataset, DataLoader
 
-from cifar_base import CIFAR100ClassDataset
+from datasets.cifar_base import CIFAR100ClassDataset
 
 import numpy as np
 
