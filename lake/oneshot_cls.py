@@ -18,9 +18,10 @@ from cls_module.cls import CLS
 
 import utils
 
-
-from omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDataset
-from cifar_one_shot_dataset import CifarTransformation, CifarOneShotDataset
+from datasets.tfms import NoiseTransformation, OcclusionTransformation
+from datasets.omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDataset
+from datasets.omniglot_instance_dataset import OmniglotInstanceDataset
+from datasets.cifar_one_shot_dataset import CifarTransformation, CifarOneShotDataset
 from oneshot_metrics import OneshotMetrics
 
 LOG_EVERY = 20
@@ -56,7 +57,7 @@ def main():
 
   dataset_name = config.get('dataset')
 
-  if dataset_name == 'Omniglot':
+  if dataset_name == 'Omniglot' or dataset_name == 'Omniglot-Instance':
     image_tfms = transforms.Compose([
         transforms.ToTensor(),
         OmniglotTransformation(resize_factor=config['image_resize_factor'])
@@ -125,7 +126,7 @@ def main():
 
   if not pretrained_model_path:
 
-    if dataset_name == 'Omniglot':
+    if dataset_name == 'Omniglot' or dataset_name == 'Omniglot-Instance':
       dataset = datasets.Omniglot('./data', background=True, download=True, transform=image_tfms)
 
     elif dataset_name == 'CIFAR':
@@ -188,18 +189,55 @@ def main():
   # ---------------------------------------------------------------------------
   print('-------- Few-shot Evaluation (Study and Recall) ---------')
 
+  # Prepare data transformations
+  recall_tfms_opts =[
+      transforms.ToTensor(),
+      OmniglotTransformation(resize_factor=config['image_resize_factor']),
+  ]
+
+  if config.get('noise_type', None):
+    recall_tfms_opts.append(
+        NoiseTransformation(noise_type=config.get('noise_type'),
+                            noise_factor=config.get('noise_factor'))
+    )
+
+  if config.get('degrade_type', None):
+    recall_tfms_opts.append(
+        OcclusionTransformation(degrade_type=config.get('degrade_type'),
+                                degrade_factor=config.get('degrade_factor'))
+    )
+
+  study_tfms = image_tfms
+  recall_tfms = transforms.Compose(recall_tfms_opts)
+
   # Prepare data loaders
   if dataset_name == 'Omniglot':
     study_dataset = OmniglotOneShotDataset('./data', train=True, download=True,
-                               transform=image_tfms, target_transform=None)
+                               transform=study_tfms, target_transform=None)
     recall_dataset = OmniglotOneShotDataset('./data', train=False, download=True,
-                               transform=image_tfms, target_transform=None)
-  
+                               transform=recall_tfms, target_transform=None)
+
+  if dataset_name == 'Omniglot-Instance':
+    # Create the study dataset and generate show/match sets of instances in the same class
+    study_dataset = OmniglotInstanceDataset('./data', train=True, download=True,
+                               transform=study_tfms, target_transform=None,
+                               batch_size=config['study_batch_size'])
+
+    # Pass the generated show/match sets to ensure that the study and recall modes
+    # are consistently paired and avoid re-generating the sets
+    recall_dataset = OmniglotInstanceDataset('./data', train=False, download=True,
+                               transform=recall_tfms, target_transform=None,
+                               batch_size=config['study_batch_size'],
+                               show_filenames=study_dataset.show_filenames,
+                               show_labels=study_dataset.show_labels,
+                               match_labels=study_dataset.match_labels,
+                               match_filenames=study_dataset.match_filenames)
+
   elif dataset_name == 'CIFAR':
     rand_class = np.random.randint(low=0, high=64, size=20)  # array of 20 random integers to select classes
-    study_dataset = CifarOneShotDataset('./data', mode='train', transform=image_tfms, target_transform=None,
+    study_dataset = CifarOneShotDataset('./data', mode='train', transform=study_tfms, target_transform=None,
                         classes=rand_class, download=False)
-    recall_dataset = CifarOneShotDataset('./data', mode='test', transform=image_tfms, target_transform=None,
+    recall_dataset = CifarOneShotDataset('./data', mode='test', transform=recall_tfms, target_transform=None,
                         classes=rand_class, download=False)
 
   study_loader = torch.utils.data.DataLoader(study_dataset, batch_size=config['study_batch_size'], shuffle=False)
