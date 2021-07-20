@@ -7,7 +7,6 @@ from cls_module.components.label_learner import LabelLearner
 
 
 class MemoryInterface(nn.Module):
-  """An implementation of a short-term memory module using a simple autoencoder."""
 
   global_key = 'memory'
   local_key = None

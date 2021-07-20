@@ -95,7 +95,7 @@ class OcclusionTransformation:
     degraded_mask_vals = degrade_value * degraded_mask
     degraded_image = degraded_image + degraded_mask_vals
 
-    return
+    return degraded_image
 
   def __call__(self, image):
     # TODO(@abdel): Implement other degradation types

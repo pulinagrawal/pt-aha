@@ -272,11 +272,13 @@ def main():
       study_train_losses, _ = model(study_data, study_target, mode='study')
       study_train_loss = study_train_losses['stm']['memory']['loss']
 
-      print('Losses step {}, ite {}: \t PR:{:.6f}\
-      PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
-                                                      study_train_loss['pr'].item(),
-                                                      study_train_loss['pr_mismatch'].item(),
-                                                      study_train_loss['pm_ec'].item()))
+      if 'pr' in study_train_loss:
+        print('Losses step {}, ite {}: \t PR:{:.6f}\
+        PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
+                                                        study_train_loss['pr'].item(),
+                                                        study_train_loss['pr_mismatch'].item(),
+                                                        study_train_loss['pm_ec'].item()))
+
       model(recall_data, recall_target, mode='study_validate')
 
     # Recall
@@ -304,19 +306,20 @@ def main():
                                   comparison_type=comparison_type)
 
       # PR Accuracy (study first) - this is the version used in the paper
-      oneshot_metrics.compare(prefix='pr_sf_',
-                              primary_features=model.features['study']['stm_pr'],
-                              primary_labels=model.features['study']['labels'],
-                              secondary_features=model.features['recall']['stm_pr'],
-                              secondary_labels=model.features['recall']['labels'],
-                              comparison_type='match_mse')
+      if 'stm_pr' in model.features['study']:
+        oneshot_metrics.compare(prefix='pr_sf_',
+                                primary_features=model.features['study']['stm_pr'],
+                                primary_labels=model.features['study']['labels'],
+                                secondary_features=model.features['recall']['stm_pr'],
+                                secondary_labels=model.features['recall']['labels'],
+                                comparison_type='match_mse')
 
-      # oneshot_metrics.compare(prefix='pr_rf_',
-      #                         primary_features=model.features['recall']['stm_pr'],
-      #                         primary_labels=model.features['recall']['labels'],
-      #                         secondary_features=model.features['study']['stm_pr'],
-      #                         secondary_labels=model.features['study']['labels'],
-      #                         comparison_type='match_mse')
+        # oneshot_metrics.compare(prefix='pr_rf_',
+        #                         primary_features=model.features['recall']['stm_pr'],
+        #                         primary_labels=model.features['recall']['labels'],
+        #                         secondary_features=model.features['study']['stm_pr'],
+        #                         secondary_labels=model.features['study']['labels'],
+        #                         comparison_type='match_mse')
 
 
       oneshot_metrics.report()
@@ -336,7 +339,11 @@ def main():
       for name in summary_names:
         mode_key, feature_key = name.split('_', 1)
 
+        if not feature_key in model.features[mode_key]:
+          continue
+
         summary_features = model.features[mode_key][feature_key]
+
         if len(summary_features.shape) > 2:
           summary_features = summary_features.permute(0, 2, 3, 1)
 

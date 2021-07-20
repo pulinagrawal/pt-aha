@@ -239,6 +239,9 @@ def add_completion_summary(summary_images, folder, batch, save_figs=True, plot_e
       if not plot_encoding or 'inputs' in name or 'recon' in name:
         ax.imshow(img, cmap='binary', vmin=0, vmax=1)
       else:
+        # Normalize to [0, 1]
+        img = (img - img.min()) / (img.max() - img.min())
+
         ax.imshow(img, vmin=-1, vmax=1)
 
     ax.axis('off')
