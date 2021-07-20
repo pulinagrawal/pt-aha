@@ -272,11 +272,13 @@ def main():
       study_train_losses, _ = model(study_data, study_target, mode='study')
       study_train_loss = study_train_losses['stm']['memory']['loss']
 
-      print('Losses step {}, ite {}: \t PR:{:.6f}\
-      PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
-                                                      study_train_loss['pr'].item(),
-                                                      study_train_loss['pr_mismatch'].item(),
-                                                      study_train_loss['pm_ec'].item()))
+      if 'pr' in study_train_loss:
+        print('Losses step {}, ite {}: \t PR:{:.6f}\
+        PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
+                                                        study_train_loss['pr'].item(),
+                                                        study_train_loss['pr_mismatch'].item(),
+                                                        study_train_loss['pm_ec'].item()))
+
       model(recall_data, recall_target, mode='study_validate')
 
     # Recall
