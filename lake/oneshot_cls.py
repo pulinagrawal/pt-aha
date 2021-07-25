@@ -27,7 +27,7 @@ LOG_EVERY = 20
 LOG_EVERY_EVAL = 1
 VAL_EVERY = 20
 SAVE_EVERY = 1
-MAX_VAL_STEPS = -1
+MAX_VAL_STEPS = 100
 MAX_PRETRAIN_STEPS = -1
 VAL_SPLIT = 0.175
 
@@ -83,7 +83,7 @@ def main():
     model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
     # Ensure that pretrained model path doesn't exist so that training occurs
-    pretrained_model_path = None
+    #pretrained_model_path = None
 
     if train_from == 'scratch':
       # Clear the directory
@@ -115,7 +115,7 @@ def main():
         try:
           model.load_state_dict(torch.load(latest))
         except Exception as e:
-          print(f"Failed to load model from path: {latest}. Please check path and try again due to exception {e}.")
+          print("Failed to load model from path: {latest}. Please check path and try again due to exception {e}.")
           return
 
   else:

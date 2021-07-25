@@ -77,7 +77,6 @@ class OneshotMetrics:
     def log_to_console(x):
       if not verbose:
         return
-      print(x)
 
     log_to_console("\n--------- Metrics -----------")
     np.set_printoptions(threshold=np.inf)

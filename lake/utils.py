@@ -10,9 +10,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def get_summary_dir():
+def get_summary_dir(experiment):
   now = datetime.datetime.now()
-  summary_dir = os.path.join('.', 'runs', now.strftime("%Y%m%d-%H%M%S"))
+  summary_dir = os.path.join('.', 'runs', experiment, now.strftime("%Y%m%d-%H%M%S"))
   return summary_dir
 
 

@@ -183,7 +183,7 @@ class CLS(nn.Module):
     return self.forward(inputs, labels, mode='study')
 
   def memorise_test(self, inputs, labels):
-    return self.forward(inputs, labels, mode='study-test')
+    return self.forward(inputs, labels, mode='study_validate')
 
   def recall(self, inputs, labels):
     return self.forward(inputs, labels, mode='recall')
