@@ -119,7 +119,7 @@ class OmniglotOneShotDataset(Dataset):
     image_path = self.filenames[idx]
     image = imageio.imread(image_path)
 
-    # Convert to float values in [0, 1]
+    # Convert to float values in [0, 1
     image = image.astype(np.float32)
     image = (image - image.min()) / (image.max() - image.min())
 
