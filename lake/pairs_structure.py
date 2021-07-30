@@ -106,7 +106,7 @@ def main():
         model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
     if not pretrained_model_path:
-        dataset = OmniglotAlphabet('./data', alphabet_name, False, 1, download=True, transform=image_tfms,
+        dataset = OmniglotAlphabet('./data', alphabet_name, False, writer_idx='any', download=True, transform=image_tfms,
                                    target_transform=None)
 
         val_size = round(VAL_SPLIT * len(dataset))
@@ -191,7 +191,15 @@ def main():
 
     pair_sequence_dataset = enumerate(zip(study_loader, recall_loader))
 
-    alphabet = OmniglotAlphabet('./data', alphabet_name, True, 1, download=True, transform=image_tfms, target_transform=None)
+    # Load images from the selected alphabet from a specific writer or random writers
+    variation = config.get('variation')
+    idx_study = config.get('character_idx_study')
+    idx_recall = config.get('character_idx_recall')
+
+    alphabet = OmniglotAlphabet('./data', alphabet_name, True, False, idx_study, download=True, transform=image_tfms, target_transform=None)
+    alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, variation, idx_recall, download=True, transform=image_tfms,
+                                target_transform=None)
+
 
     # Initialise metrics
     oneshot_metrics = OneshotMetrics()
@@ -211,22 +219,23 @@ def main():
         study_data = study_data.to(device)
         study_target = study_target.to(device)
 
-        recall_data = [torch.cat((alphabet[int(a[0].item())][0], alphabet[int(a[1].item())][0]), 2) for a in recall_set]
-        recall_target_pairs = [(alphabet[int(a[0].item())][1], alphabet[int(a[1].item())][1]) for a in recall_set]
-        del recall_data[0:characters-1]
+        recall_data = [torch.cat((alphabet_recall[int(a[0].item())][0], alphabet_recall[int(a[1].item())][0]), 2)
+                       for a in recall_set]
+        recall_target_pairs = [(alphabet_recall[int(a[0].item())][1], alphabet_recall[int(a[1].item())][1]) for a in
+                               recall_set]
+
+        del recall_data[0:characters]
 
         recall_data = torch.stack(recall_data)
-        single_characters = [torch.cat((alphabet[a][0], torch.zeros(1, 52, 52)), 2) for a in range(0, characters-1)]
+        single_characters = [torch.cat((alphabet_recall[a][0], torch.zeros(1, 52, 52)), 2) for a in range(0, characters)]
         single_characters = torch.stack(single_characters)
         recall_data = torch.cat((single_characters, recall_data), 0)
-
 
         labels_recall = list(set(recall_target_pairs))
         recall_target = [labels_recall.index(value) for value in recall_target_pairs]
         del recall_target[0:characters-1]
 
-
-        recall_target = list(range(max(recall_target)+1, max(recall_target)+characters)) + recall_target
+        recall_target = list(range(max(recall_target) + 1, max(recall_target) + characters)) + recall_target
         recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
 
         recall_data = recall_data.to(device)
@@ -241,16 +250,16 @@ def main():
         # Study
         # --------------------------------------------------------------------------
         for step in range(config['study_steps']):
-          study_train_losses, _ = model(study_data, study_target, mode='study')
-          study_train_loss = study_train_losses['stm']['memory']['loss']
+            study_train_losses, _ = model(study_data, study_target, mode='study')
+            study_train_loss = study_train_losses['stm']['memory']['loss']
 
-          print('Losses step {}, ite {}: \t PR:{:.6f}\
+            print('Losses step {}, ite {}: \t PR:{:.6f}\
                 PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
                                                              study_train_loss['pr'].item(),
                                                              study_train_loss['pr_mismatch'].item(),
                                                              study_train_loss['pm_ec'].item()))
 
-          model(recall_data, recall_target, mode='study_validate')
+            model(recall_data, recall_target, mode='study_validate')
 
         # Recall
         # --------------------------------------------------------------------------
@@ -321,10 +330,10 @@ def main():
 
             utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
 
-        oneshot_metrics.report_averages()
+    oneshot_metrics.report_averages()
 
-        writer.flush()
-        writer.close()
+    writer.flush()
+    writer.close()
 
 
 if __name__ == '__main__':

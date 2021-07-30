@@ -14,12 +14,13 @@ class OmniglotAlphabet(Dataset):
         'images_background': '68d2efa1b9178cc56df9314c21c6e718'
     }
 
-    def __init__(self, root, alphabet, use_alphabet, character_idx,
+    def __init__(self, root, alphabet, use_alphabet, variation=False, writer_idx=1,
                  transform=None, target_transform=None, download=False):
         self.root = root
-        self.alphabet = alphabet #The alphabet of interest.
-        self.use_alphabet = use_alphabet #Indicates wheather to only use this alphabet or use the rest of the alphabets.
-        self.character_idx = character_idx
+        self.alphabet = alphabet # The alphabet of interest.
+        self.use_alphabet = use_alphabet # Indicates wheather to only use this alphabet or use the rest of the alphabets.
+        self.variation = variation
+        self.writer_idx = writer_idx
         self.transform = transform
         self.target_transform = target_transform
 
@@ -32,15 +33,19 @@ class OmniglotAlphabet(Dataset):
 
         self.target_folder = join(self.root, self._get_target_folder())
 
-        if self.use_alphabet: #All characters except from those in the alphabet specified.
+        if self.use_alphabet: # Only the characters in the given alphabet.
           self.characters = [join(self.alphabet, c) for c in list_dir(join(self.target_folder, self.alphabet))]
-          self.character_images = [[(image, idx) for image in list_files(join(self.target_folder, character), '.png')]
+          self.characters = sorted(self.characters)
+          self.character_images = [[(image, idx) for image in sorted(list_files(join(self.target_folder, character), '.png'))]
                                   for idx, character in enumerate(self.characters)]
-          self.flat_character_images = [character[self.character_idx] for character in self.character_images]
-        else: #Only the characters in the given alphabet.
+          if self.variation:
+            self.flat_character_images = [[character[character_idx] for character_idx in range(0, 20)] for character
+                                            in self.character_images]
+          else:
+            self.flat_character_images = [character[self.writer_idx] for character in self.character_images]
+        else: # All characters except from those in the alphabet specified.
           self.alphabets = list_dir(self.target_folder)
           self.alphabets.remove(str(self.alphabet))
-          self.alphabets.sort()
           self.characters: List[str] = sum([[join(a, c) for c in list_dir(join(self.target_folder, a))]
                                            for a in self.alphabets], [])
           self.character_images = [[(image, idx) for image in list_files(join(self.target_folder, character), '.png')]
@@ -51,7 +56,14 @@ class OmniglotAlphabet(Dataset):
         return len(self.flat_character_images)
 
     def __getitem__(self, index: int):
-        image_name, character_class = self.flat_character_images[index]
+
+        if self.variation:
+            character_images = self.flat_character_images[index]
+            rand_character = np.random.randint(20)
+            image_name, character_class = character_images[rand_character]
+        else:
+            image_name, character_class = self.flat_character_images[index]
+
         image_path = join(self.target_folder, self.characters[character_class], image_name)
         image = imageio.imread(image_path)
 
@@ -67,7 +79,7 @@ class OmniglotAlphabet(Dataset):
 
         return image, character_class
 
-    def _check_integrity(self) -> bool:
+    def _check_integrity(self)  :
         zip_filename = self._get_target_folder()
         if not check_integrity(join(self.root, zip_filename + '.zip'), self.zips_md5[zip_filename]):
             return False

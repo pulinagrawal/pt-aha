@@ -1,8 +1,13 @@
 {
   "seed": 42,
+
   "characters": 8,
   "sequence_length": 5499,
   "alphabet": "Latin",
+  "variation": false,
+  "character_idx_study": 1,
+  "character_idx_recall": 1,
+
   "image_resize_factor": 0.5,
   "image_shape": [1, 1, 52, 104],
 
