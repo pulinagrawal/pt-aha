@@ -1,6 +1,7 @@
 {
   "seed": 42,
 
+  "experiment_name": "pairs_structure",
   "characters": 8,
   "sequence_length": 5499,
   "alphabet": "Latin",
