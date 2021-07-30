@@ -77,6 +77,7 @@ def main():
   # ---------------------------------------------------------------------------
   start_epoch = 1
 
+  experiment = config.get('experiment_name')
   if previous_run_path:
     summary_dir = previous_run_path
     writer = SummaryWriter(log_dir=summary_dir)
@@ -119,7 +120,7 @@ def main():
           return
 
   else:
-    summary_dir = utils.get_summary_dir()
+    summary_dir = utils.get_summary_dir(experiment)
     writer = SummaryWriter(log_dir=summary_dir)
     model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
