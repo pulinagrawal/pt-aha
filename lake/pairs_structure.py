@@ -59,6 +59,7 @@ def main():
     start_epoch = 1
 
     experiment = config.get('experiment_name')
+    learning_type = config.get('learning_type')
 
     if previous_run_path:
         summary_dir = previous_run_path
@@ -103,7 +104,7 @@ def main():
                      return
 
     else:
-        summary_dir = utils.get_summary_dir(experiment)
+        summary_dir = utils.get_summary_dir(experiment + "/" + learning_type)
         writer = SummaryWriter(log_dir=summary_dir)
         model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
@@ -183,8 +184,8 @@ def main():
     length = config.get('sequence_length')
 
     # Create sequence of pairs
-    sequence_study = SequenceGenerator(characters, length)
-    sequence_recall = SequenceGenerator(characters, length)
+    sequence_study = SequenceGenerator(characters, length, learning_type)
+    sequence_recall = SequenceGenerator(characters, length, learning_type)
 
     sequence_study_tensor = torch.FloatTensor(sequence_study.sequence)
     sequence_recall_tensor = torch.FloatTensor(sequence_recall.sequence)
@@ -212,8 +213,11 @@ def main():
     for idx, (study_set, recall_set) in pair_sequence_dataset:
         study_data = [torch.cat((alphabet[int(a[0].item())][0], alphabet[int(a[1].item())][0]), 2) for a in study_set]
         study_target_pairs = [(alphabet[int(a[0].item())][1], alphabet[int(a[1].item())][1]) for a in study_set]
-        labels_study = list(set(study_target_pairs))
-        study_target = [labels_study.index(value) for value in study_target_pairs]
+        study_target = []
+        for idx_pair, (a, b) in enumerate(study_target_pairs):
+            tmp = np.zeros(characters)
+            np.put(tmp, [a, b], 1)
+            study_target.extend([tmp])
 
         study_data = torch.stack(study_data)
         study_target = torch.tensor(study_target, dtype=torch.long, device=device)
@@ -233,11 +237,20 @@ def main():
         single_characters = torch.stack(single_characters)
         recall_data = torch.cat((single_characters, recall_data), 0)
 
-        labels_recall = list(set(recall_target_pairs))
-        recall_target = [labels_recall.index(value) for value in recall_target_pairs]
+        recall_target = []
+        for idx_pair, (a, b) in enumerate(recall_target_pairs):
+            tmp = np.zeros(characters)
+            np.put(tmp, [a, b], 1)
+            recall_target.extend([tmp])
         del recall_target[0:characters-1]
 
-        recall_target = list(range(max(recall_target) + 1, max(recall_target) + characters)) + recall_target
+        recall_individual = []
+        for a in range(characters):
+            tmp = np.zeros(characters)
+            np.put(tmp, a, 1)
+            recall_individual.extend([tmp])
+
+        recall_target = recall_individual + recall_target
         recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
 
         recall_data = recall_data.to(device)
@@ -252,7 +265,7 @@ def main():
         # Study
         # --------------------------------------------------------------------------
         for step in range(config['study_steps']):
-            study_train_losses, _ = model(study_data, study_target, mode='study')
+            study_train_losses, outputs_study = model(study_data, study_target, mode='study')
             study_train_loss = study_train_losses['stm']['memory']['loss']
 
             print('Losses step {}, ite {}: \t PR:{:.6f}\

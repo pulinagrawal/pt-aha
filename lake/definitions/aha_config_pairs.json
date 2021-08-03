@@ -2,6 +2,7 @@
   "seed": 42,
 
   "experiment_name": "pairs_structure",
+  "learning_type": "episodic",
   "characters": 8,
   "sequence_length": 5499,
   "alphabet": "Latin",
@@ -131,6 +132,14 @@
         "decoder_nonlinearity": "leaky_relu",
         "use_bias": true,
         "norm_inputs": true
-    }
+    },
+    "classifier": {
+        "learning_rate": 0.01,
+        "weight_decay": 0.000025,
+        "input_dropout": 0.0,
+        "hidden_dropout": [],
+        "hidden_units": [800],
+        "output_units": 64
+      }
   }
 }

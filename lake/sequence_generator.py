@@ -12,11 +12,13 @@ class SequenceGenerator:
     a time. After AB, for example, BC, BE, or BG followed with equal probability; if BC was chosen, the next input would
 be CD. """
 
-  def __init__(self, characters, seq_length):
+  def __init__(self, characters, seq_length, type):
     self.characters = characters
     self.length = seq_length
+    self.type = type
     self.core_sequence = self._create_core_sequence()
     self.sequence = self._create_sequence()
+
 
   def _create_core_sequence(self):
     if self.characters % 2 != 0:
@@ -29,15 +31,21 @@ be CD. """
   def _create_sequence(self):
     first = range(0, self.characters, 2)
     second = range(1, self.characters, 2)
-    core_idx = np.random.randint(0, self.characters/2)
-    seq = [self.core_sequence[core_idx]]
-    while len(seq) < self.length:
-       next_seq = np.delete(first, core_idx)
-       next_pair = [(second[core_idx], next_seq[a]) for a in range(0, len(next_seq))]
-       idx = np.random.randint(0, len(next_seq))
-       seq.extend([next_pair[idx]])
-       core_idx = np.where(list(next_pair[idx])[1] == first)[0][0]
-       seq.extend([self.core_sequence[core_idx]])
+    if self.type == "statistical":
+        core_idx = np.random.randint(0, self.characters/2)
+        seq = [self.core_sequence[core_idx]]
+        while len(seq) < self.length:
+           next_seq = np.delete(first, core_idx)
+           next_pair = [(second[core_idx], next_seq[a]) for a in range(0, len(next_seq))]
+           idx = np.random.randint(0, len(next_seq))
+           seq.extend([next_pair[idx]])
+           core_idx = np.where(list(next_pair[idx])[1] == first)[0][0]
+           seq.extend([self.core_sequence[core_idx]])
+    elif self.type == "episodic":
+        core_idx = np.random.randint(0, self.characters / 2, self.length)
+        seq = [(first[a], second[a]) for a in core_idx]
+    else:
+        raise NotImplementedError('Learning type must be statistical or episodic.')
 
     return seq
 
