@@ -8,9 +8,9 @@ import numpy as np
 import glob
 from torch.utils.tensorboard import SummaryWriter
 from cls_module.cls import CLS
-from sequence_generator import SequenceGenerator
-from omniglot_one_shot_dataset import OmniglotTransformation
-from omniglot_per_alphabet_dataset import OmniglotAlphabet
+from datasets.sequence_generator import SequenceGenerator
+from datasets.omniglot_one_shot_dataset import OmniglotTransformation
+from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
 from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
 
