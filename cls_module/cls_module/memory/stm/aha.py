@@ -185,15 +185,27 @@ class AHA(MemoryInterface):
     # Build the Pattern Completion (PC) module
     pc_output_shape = self.build_pc(pc_config=self.config['pc'], pc_input_shape=ps_output_shape)
 
-    # Build the Pattern Mapping (PM) module - to the EC (as per biology)
-    self.build_ae(name='pm_ec', config=self.config['pm_ec'],
-                  input_shape=pc_output_shape,
-                  target_shape=self.input_shape)
+    if self.config['build_pm']:
+      # Build the Pattern Mapping (PM) module - to the EC (as per biology)
+      self.build_ae(name='pm_ec', config=self.config['pm_ec'],
+                    input_shape=pc_output_shape,
+                    target_shape=self.input_shape)
 
-    # Build the Pattern Mapping (PM) module - to an arbitrary 'target' (main use-case is the original input image)
-    self.build_ae(name='pm', config=self.config['pm'],
-                  input_shape=pc_output_shape,
-                  target_shape=self.target_shape)
+      # Build the Pattern Mapping (PM) module - to an arbitrary 'target' (main use-case is the original input image)
+      self.build_ae(name='pm', config=self.config['pm'],
+                    input_shape=pc_output_shape,
+                    target_shape=self.target_shape)
+
+    if self.config['build_msp']:
+      self.build_ae(name='ca1', config=self.config['ca1'],
+                    input_shape=self.input_shape,
+                    target_shape=self.input_shape)
+
+      ca1_output_shape = [1, self.config['ca1']['num_units']]
+
+      self.build_ae(name='ca3_ca1', config=self.config['ca3_ca1'],
+                      input_shape=pc_output_shape,
+                      target_shape=ca1_output_shape)
 
     # Build the Label Learner module
     if 'classifier' in self.config:
@@ -379,7 +391,7 @@ class AHA(MemoryInterface):
     if ae.training:
       ae_optimizer.zero_grad()
 
-    encoding, decoding = self.pm(inputs)
+    encoding, decoding = ae(inputs)
 
     loss = F.mse_loss(decoding, targets)
 
@@ -458,17 +470,46 @@ class AHA(MemoryInterface):
 
     outputs['pc'] = self.forward_pc(inputs=pc_cue)
 
-    losses['pm'], outputs['pm'] = self.forward_ae(name='pm', inputs=outputs['pc'], targets=targets)
-    losses['pm_ec'], outputs['pm_ec'] = self.forward_ae(name='pm_ec', inputs=outputs['pc'], targets=targets)
+    if self.config['build_pm']:
+      losses['pm'], outputs['pm'] = self.forward_ae(name='pm', inputs=outputs['pc'], targets=targets)
+      losses['pm_ec'], outputs['pm_ec'] = self.forward_ae(name='pm_ec', inputs=outputs['pc'], targets=targets)
+      decoding = outputs['pm']['decoding']
+      decoding_ec = outputs['pm_ec']['decoding']
+
+    if self.config['build_msp']:
+      ca3_ca1_target = None
+
+      # During study, EC will drive the CA1 training
+      if self.training:
+        losses['ca1'], outputs['ca1'] = self.forward_ae(name='ca1', inputs=inputs, targets=inputs)
+        ca3_ca1_target = outputs['ca1']['encoding']
+
+      losses['ca3_ca1'], outputs['ca3_ca1'] = self.forward_ae(name='ca3_ca1',
+                                                              inputs=outputs['pc'],
+                                                              targets=ca3_ca1_target)
+
+      # During recall, the CA3:CA1 will drive CA1 reconstruction
+      if not self.training:
+        ca1_hidden_recon = outputs['ca3_ca1']['decoding']
+        ca1_decoding = self.ca1.decode(ca1_hidden_recon)
+        losses['ca1'] = F.mse_loss(ca1_decoding, inputs)
+        outputs['ca1'] = {
+          'encoding': None,
+          'decoding': ca1_decoding,
+          'output': None
+        }
+
+      decoding = outputs['ca1']['decoding']
+      decoding_ec = outputs['ca1']['decoding']
 
     outputs['encoding'] = outputs['pc'].detach()
-    outputs['decoding'] = outputs['pm']['decoding'].detach()
-    outputs['decoding_ec'] = outputs['pm_ec']['decoding'].detach()
+    outputs['decoding'] = decoding.detatch()
+    outputs['decoding_ec'] = decoding_ec.detatch()
     outputs['output'] = outputs['pc'].detach()
 
     features['pc'] = outputs['pc'].detach().cpu()
-    features['recon'] = outputs['pm']['decoding'].detach().cpu()
-    features['recon_ec'] =  outputs['pm_ec']['decoding'].detach().cpu()
+    features['recon'] = decoding.detatch().cpu()
+    features['recon_ec'] =  decoding_ec.detach().cpu()
 
     self.features = features
 
