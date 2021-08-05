@@ -61,6 +61,8 @@
     }
   },
   "stm": {
+    "msp_type": "pm",
+
     "ps": {
         "inhibition_decay": 0.95,
         "knockout_rate": 0.25,
