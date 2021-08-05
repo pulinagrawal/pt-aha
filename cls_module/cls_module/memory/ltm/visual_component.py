@@ -36,6 +36,17 @@ class VisualComponent(MemoryInterface):
     if 'classifier' in self.config:
       self.build_classifier(input_shape=self.output_shape)
 
+  def forward_decode(self, encoding):
+   # Optionally use different stride at test time
+    stride = self.config['stride']
+    if not self.vc.training and 'eval_stride' in self.config:
+      stride = self.config['eval_stride']
+
+    encoding = self.unprepare_encoding(encoding)
+
+    with torch.no_grad():
+      return self.vc.decode(encoding, stride)
+
   def forward_memory(self, inputs, targets, labels):
     """Perform an optimization step using the memory module."""
     del labels
@@ -76,17 +87,11 @@ class VisualComponent(MemoryInterface):
     encoding = encoding.detach()
 
     if self.config['output_pool_size'] > 1:
-      encoding = utils.max_pool2d_same(
+      encoding, self.pool_indices = F.max_pool2d(
           encoding,
           kernel_size=self.config['output_pool_size'],
-          stride=self.config['output_pool_stride'])
-
-      # pool_padding = (self.config['output_pool_size'] - 1) // 2
-      # encoding = F.max_pool2d(
-      #     encoding,
-      #     kernel_size=self.config['output_pool_size'],
-      #     stride=self.config['output_pool_stride'],
-      #     padding=pool_padding)
+          stride=self.config['output_pool_stride'],
+          padding=self.config.get('output_pool_padding', 0), return_indices=True)
 
     if self.config['output_norm_per_sample']:
       frobenius_norm = torch.sqrt(
@@ -96,5 +101,19 @@ class VisualComponent(MemoryInterface):
       )
 
       encoding = encoding / frobenius_norm
+
+    return encoding
+
+  def unprepare_encoding(self, prepared_encoding):
+    """Undo any postprocessing for the VC encoding."""
+    encoding = prepared_encoding.detach()
+
+    if self.config['output_pool_size'] > 1:
+      encoding = F.max_unpool2d(
+          encoding,
+          kernel_size=self.config['output_pool_size'],
+          stride=self.config['output_pool_stride'],
+          padding=self.config.get('output_pool_padding', 0),
+          indices=self.pool_indices)
 
     return encoding
