@@ -154,6 +154,14 @@ class AHA(MemoryInterface):
         'ec_ca3': {
             'params': True,
             'optim': True
+        },
+        'ca3_ca1': {
+            'params': True,
+            'optim': True
+        },
+        'ca1': {
+            'params': False,
+            'optim': False
         }
     }
 
@@ -185,18 +193,8 @@ class AHA(MemoryInterface):
     # Build the Pattern Completion (PC) module
     pc_output_shape = self.build_pc(pc_config=self.config['pc'], pc_input_shape=ps_output_shape)
 
-    if self.config['build_pm']:
-      # Build the Pattern Mapping (PM) module - to the EC (as per biology)
-      self.build_ae(name='pm_ec', config=self.config['pm_ec'],
-                    input_shape=pc_output_shape,
-                    target_shape=self.input_shape)
-
-      # Build the Pattern Mapping (PM) module - to an arbitrary 'target' (main use-case is the original input image)
-      self.build_ae(name='pm', config=self.config['pm'],
-                    input_shape=pc_output_shape,
-                    target_shape=self.target_shape)
-
-    if self.config['build_msp']:
+    # Build Monosynaptic Pathway
+    if self.config.get('msp_type', None) == 'ca1':
       self.build_ae(name='ca1', config=self.config['ca1'],
                     input_shape=self.input_shape,
                     target_shape=self.input_shape)
@@ -206,6 +204,16 @@ class AHA(MemoryInterface):
       self.build_ae(name='ca3_ca1', config=self.config['ca3_ca1'],
                       input_shape=pc_output_shape,
                       target_shape=ca1_output_shape)
+    else:
+      # Build the Pattern Mapping (PM) module - to the EC (as per biology)
+      self.build_ae(name='pm_ec', config=self.config['pm_ec'],
+                    input_shape=pc_output_shape,
+                    target_shape=self.input_shape)
+
+      # Build the Pattern Mapping (PM) module - to an arbitrary 'target' (main use-case is the original input image)
+      self.build_ae(name='pm', config=self.config['pm'],
+                    input_shape=pc_output_shape,
+                    target_shape=self.target_shape)
 
     # Build the Label Learner module
     if 'classifier' in self.config:
@@ -470,26 +478,17 @@ class AHA(MemoryInterface):
 
     outputs['pc'] = self.forward_pc(inputs=pc_cue)
 
-    if self.config['build_pm']:
-      losses['pm'], outputs['pm'] = self.forward_ae(name='pm', inputs=outputs['pc'], targets=targets)
-      losses['pm_ec'], outputs['pm_ec'] = self.forward_ae(name='pm_ec', inputs=outputs['pc'], targets=targets)
-      decoding = outputs['pm']['decoding']
-      decoding_ec = outputs['pm_ec']['decoding']
-
-    if self.config['build_msp']:
-      ca3_ca1_target = None
-
-      # During study, EC will drive the CA1 training
-      if self.training:
-        losses['ca1'], outputs['ca1'] = self.forward_ae(name='ca1', inputs=inputs, targets=inputs)
-        ca3_ca1_target = outputs['ca1']['encoding']
+    if self.config.get('msp_type', None) == 'ca1':
+      # During study, EC will drive the CA1
+      losses['ca1'], outputs['ca1'] = self.forward_ae(name='ca1', inputs=inputs, targets=inputs)
+      ca3_ca1_target = outputs['ca1']['encoding']
 
       losses['ca3_ca1'], outputs['ca3_ca1'] = self.forward_ae(name='ca3_ca1',
                                                               inputs=outputs['pc'],
                                                               targets=ca3_ca1_target)
 
       # During recall, the CA3:CA1 will drive CA1 reconstruction
-      if not self.training:
+      if not self.training and self.config['ca1']['ca3_recall']:
         ca1_hidden_recon = outputs['ca3_ca1']['decoding']
         ca1_decoding = self.ca1.decode(ca1_hidden_recon)
         losses['ca1'] = F.mse_loss(ca1_decoding, inputs)
@@ -499,17 +498,24 @@ class AHA(MemoryInterface):
           'output': None
         }
 
-      decoding = outputs['ca1']['decoding']
-      decoding_ec = outputs['ca1']['decoding']
+      outputs['decoding'] = None
+      features['recon'] = None
+
+      outputs['decoding_ec'] = outputs['ca1']['decoding'].detach()
+      features['recon_ec'] =  outputs['ca1']['decoding'].detach().cpu()
+    else:
+      losses['pm'], outputs['pm'] = self.forward_ae(name='pm', inputs=outputs['pc'], targets=targets)
+      losses['pm_ec'], outputs['pm_ec'] = self.forward_ae(name='pm_ec', inputs=outputs['pc'], targets=inputs)
+
+      outputs['decoding'] = outputs['pm']['decoding'].detach()
+      features['recon'] = outputs['pm']['decoding'].detach().cpu()
+
+      outputs['decoding_ec'] = outputs['pm_ec']['decoding'].detach()
+      features['recon_ec'] =  outputs['pm_ec']['decoding'].detach().cpu()
 
     outputs['encoding'] = outputs['pc'].detach()
-    outputs['decoding'] = decoding.detatch()
-    outputs['decoding_ec'] = decoding_ec.detatch()
     outputs['output'] = outputs['pc'].detach()
-
     features['pc'] = outputs['pc'].detach().cpu()
-    features['recon'] = decoding.detatch().cpu()
-    features['recon_ec'] =  decoding_ec.detach().cpu()
 
     self.features = features
 

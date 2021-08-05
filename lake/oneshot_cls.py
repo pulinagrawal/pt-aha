@@ -250,7 +250,7 @@ def main():
   # Initialise metrics
   oneshot_metrics = OneshotMetrics()
 
-  # Load the pretrained model
+  # Initialise CLS
   model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
   for idx, ((study_data, study_target), (recall_data, recall_target)) in oneshot_dataset:
@@ -263,7 +263,12 @@ def main():
     recall_target = torch.from_numpy(np.array(recall_target)).to(device)
 
     # Reset to saved model
-    model.load_state_dict(torch.load(pretrained_model_path))
+    model_dict = model.state_dict()
+    pretrained_dict = torch.load(pretrained_model_path)
+    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+    model_dict.update(pretrained_dict)
+    model.load_state_dict(pretrained_dict)
+
     model.reset()
 
     # Study
@@ -272,12 +277,12 @@ def main():
       study_train_losses, _ = model(study_data, study_target, mode='study')
       study_train_loss = study_train_losses['stm']['memory']['loss']
 
-      if 'pr' in study_train_loss:
+      if all (k in study_train_loss for k in ('pr', 'pm_ec')):
         print('Losses step {}, ite {}: \t PR:{:.6f}\
-        PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
-                                                        study_train_loss['pr'].item(),
-                                                        study_train_loss['pr_mismatch'].item(),
-                                                        study_train_loss['pm_ec'].item()))
+              PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
+                                                              study_train_loss['pr'].item(),
+                                                              study_train_loss['pr_mismatch'].item(),
+                                                              study_train_loss['pm_ec'].item()))
 
       model(recall_data, recall_target, mode='study_validate')
 
