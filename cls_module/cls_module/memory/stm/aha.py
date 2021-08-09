@@ -457,7 +457,7 @@ class AHA(MemoryInterface):
         # Compute the post synaptic activity for loss calculation
         post_dg_ca3_out = self.dg_ca3(dg_ca3_in)
         post_ec_ca3_out = self.ec_ca3(ec_ca3_in)
-        post_pc_cue = post_ec_ca3_out + post_ec_ca3_out
+        post_pc_cue = post_dg_ca3_out + post_ec_ca3_out
 
         losses['dg_ca3'] = F.mse_loss(pre_dg_ca3_out, post_dg_ca3_out)
         losses['ec_ca3'] = F.mse_loss(pre_ec_ca3_out, post_ec_ca3_out)
