@@ -1,18 +1,25 @@
 {
   "seed": 42,
+  "seeds": 100,
 
-  "experiment_name": "one_shot",
+  "experiment_name": "pairs_structure",
+  "learning_type": "statistical",
+  "characters": 8,
+  "sequence_length": 5500,
+  "alphabet": "Latin",
+  "variation": false,
+  "character_idx_study": 1,
+  "character_idx_recall": 1,
+  "test_single_characters": true,
 
-  "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
+  "image_shape": [1, 1, 52, 104],
 
   "pretrain_epochs": 10,
-  "pretrain_batch_size": 128,
-
-  "study_steps": 60,
-  "study_batch_size": 20,
-
-  "dataset":  "Omniglot",
+  "pretrain_batch_size": 150,
+  "study_steps": 80,
+  "initial_response_step": 20,
+  "study_batch_size": 250,
 
   "ltm_type": "vc",
   "stm_type": "aha",
@@ -33,7 +40,7 @@
     "kernel_size": 10,
 
     "stride": 5,
-    "eval_stride": 1,
+    "eval_stride": 5,
     "encoder_padding": "same",
     "decoder_padding": "same",
 
@@ -59,12 +66,10 @@
       "hidden_dropout": [],
 
       "hidden_units": [],
-      "output_units": 20
+      "output_units": 64
     }
   },
   "stm": {
-    "msp_type": "pm",
-
     "ps": {
         "inhibition_decay": 0.95,
         "knockout_rate": 0.25,
@@ -130,6 +135,14 @@
         "decoder_nonlinearity": "leaky_relu",
         "use_bias": true,
         "norm_inputs": true
-    }
+    },
+    "classifier": {
+        "learning_rate": 0.01,
+        "weight_decay": 0.000025,
+        "input_dropout": 0.0,
+        "hidden_dropout": [],
+        "hidden_units": [800],
+        "output_units": 64
+      }
   }
 }
