@@ -1,9 +1,11 @@
 import os
+import csv
 import json
 import argparse
 import logging
 import utils
 import torch
+import torch.nn
 import numpy as np
 import glob
 from torch.utils.tensorboard import SummaryWriter
@@ -37,319 +39,345 @@ def main():
     with open(args.config) as config_file:
         config = json.load(config_file)
 
-    seed = config['seed']
-    utils.set_seed(seed)
-    np.random.seed(seed)
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    image_tfms = transforms.Compose([
-       transforms.ToTensor(),
-       OmniglotTransformation(resize_factor=config['image_resize_factor'])])
-
-    image_shape = config['image_shape']
-    alphabet_name = config.get('alphabet')
-
-    pretrained_model_path = config.get('pretrained_model_path', None)
-    previous_run_path = config.get('previous_run_path', None)
-    train_from = config.get('train_from', None)
-
-    # Pretraining
-    # ---------------------------------------------------------------------------
-    start_epoch = 1
-
+    seeds = config['seeds']
+    experiment = config.get('experiment_name')
+    learning_type = config.get('learning_type')
+    main_summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, main_folder=True)
     experiment = config.get('experiment_name')
     learning_type = config.get('learning_type')
 
-    if previous_run_path:
-        summary_dir = previous_run_path
-        writer = SummaryWriter(log_dir=summary_dir)
+    for _ in range(seeds):
+
+        seed = np.random.randint(1, 10000)
+        utils.set_seed(seed)
+        #np.random.seed(seed) if it is inside utils, do we need it here?
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        image_tfms = transforms.Compose([
+           transforms.ToTensor(),
+           OmniglotTransformation(resize_factor=config['image_resize_factor'])])
+
+        image_shape = config['image_shape']
+        alphabet_name = config.get('alphabet')
+
+        pretrained_model_path = config.get('pretrained_model_path', None)
+        previous_run_path = config.get('previous_run_path', None)
+        train_from = config.get('train_from', None)
+
+        # Pretraining
+        # ---------------------------------------------------------------------------
+        start_epoch = 1
+
+        if previous_run_path:
+            summary_dir = previous_run_path
+            writer = SummaryWriter(log_dir=summary_dir)
+            model = CLS(image_shape, config, device=device, writer=writer).to(device)
+
+            # Ensure that pretrained model path doesn't exist so that training occurs
+            #pretrained_model_path = None
+
+            if train_from == 'scratch':
+                # Clear the directory
+                for file in os.listdir(previous_run_path):
+                    path = os.path.join(previous_run_path, file)
+                    try:
+                        os.unlink(os.path.join(path))
+                    except Exception as e:
+                        print(f"Failed to remove file with path {path} due to exception {e}")
+
+            elif train_from == 'latest':
+                model_path = os.path.join(previous_run_path, 'pretrained_model_*')
+                print(model_path)
+                # Find the latest file in the directory
+                latest = max(glob.glob(model_path), key=os.path.getctime)
+
+                # Find the epoch that was stopped on
+                i = len(latest) - 4  # (from before the .pt)
+                latest_epoch = 0
+                while latest[i] != '_':
+                    latest_epoch *= 10
+                    latest_epoch += int(latest[i])
+                    i -= 1
+
+                if latest_epoch < config['pretrain_epochs']:
+                    start_epoch = latest_epoch + 1
+
+                print("Attempting to find existing checkpoint")
+                if os.path.exists(latest):
+                    try:
+                        model.load_state_dict(torch.load(latest))
+                    except Exception as e:
+                         print("Failed to load model from path: {latest}. Please check path and try again due to exception {e}.")
+                         return
+
+        else:
+            summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, main_folder=False)
+            writer = SummaryWriter(log_dir=summary_dir)
+            model = CLS(image_shape, config, device=device, writer=writer).to(device)
+
+        if not pretrained_model_path:
+            dataset = OmniglotAlphabet('./data', alphabet_name, False, writer_idx='any', download=True, transform=image_tfms,
+                                       target_transform=None)
+
+            val_size = round(VAL_SPLIT * len(dataset))
+            train_size = len(dataset) - val_size
+
+            train_set, val_set = torch.utils.data.random_split(dataset, [train_size, val_size])
+
+            train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['pretrain_batch_size'], shuffle=True)
+            val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['pretrain_batch_size'], shuffle=True)
+
+            # Pre-train the model
+            for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
+
+                for batch_idx, (data, target) in enumerate(train_loader):
+
+                    if 0 < MAX_PRETRAIN_STEPS < batch_idx:
+                        print("Pretrain steps, {}, has exceeded max of {}.".format(batch_idx, MAX_PRETRAIN_STEPS))
+                        break
+
+                    # An empty image is add to each character (an empty pair character)
+                    data = [torch.cat((a, torch.zeros(1, 52, 52)), 2) for a in data]
+                    data = torch.stack(data)
+                    labels = list(set(target))
+                    target = torch.tensor([labels.index(value) for value in target])
+                    data = data.to(device)
+                    target = target.to(device)
+
+                    losses, _ = model(data, labels=target if model.is_ltm_supervised() else None, mode='pretrain')
+                    pretrain_loss = losses['ltm']['memory']['loss'].item()
+
+                    if batch_idx % LOG_EVERY == 0:
+                        print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                            epoch, batch_idx, len(train_loader),
+                            100. * batch_idx / len(train_loader), pretrain_loss))
+
+                    if batch_idx % VAL_EVERY == 0 or batch_idx == len(train_loader) - 1:
+                        logging.info("\t--- Start validation")
+
+                        with torch.no_grad():
+                            for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
+
+                                if batch_idx_val >= MAX_VAL_STEPS:
+                                    print("\tval batch steps, {}, has exceeded max of {}.".format(batch_idx_val,
+                                                                                                  MAX_VAL_STEPS))
+                                    break
+
+                                val_data = [torch.cat((a, torch.zeros(1, 52, 52)), 2) for a in val_data]
+                                val_data = torch.stack(val_data)
+
+                                val_data = val_data.to(device)
+                                target = target.to(device)
+
+                                val_losses, _ = model(val_data, labels=val_target if model.is_ltm_supervised() else None,
+                                                      mode='validate')
+                                val_pretrain_loss = val_losses['ltm']['memory']['loss'].item()
+
+                                if batch_idx_val % LOG_EVERY == 0:
+                                    print('\tValidation for Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                        epoch, batch_idx_val, len(val_loader),
+                                        100. * batch_idx_val / len(val_loader), val_pretrain_loss))
+
+                if epoch % SAVE_EVERY == 0:
+                    pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
+                    print('Saving model to:', pretrained_model_path)
+                    torch.save(model.state_dict(), pretrained_model_path)
+
+        # Study and Recall
+        # ---------------------------------------------------------------------------
+        print('-------- Few-shot Evaluation (Study and Recall) ---------')
+
+        characters = config.get('characters')
+        length = config.get('sequence_length')
+        batch_size = config['study_batch_size']
+
+        # Create sequence of pairs
+        sequence_study = SequenceGenerator(characters, length, learning_type)
+        sequence_recall = SequenceGenerator(characters, length, learning_type)
+
+        sequence_study_tensor = torch.FloatTensor(sequence_study.sequence)
+        sequence_recall_tensor = torch.FloatTensor(sequence_recall.sequence)
+        study_loader = torch.utils.data.DataLoader(sequence_study_tensor, batch_size=batch_size, shuffle=False)
+        recall_loader = torch.utils.data.DataLoader(sequence_recall_tensor, batch_size=batch_size, shuffle=False)
+
+        pair_sequence_dataset = enumerate(zip(study_loader, recall_loader))
+
+        # Load images from the selected alphabet from a specific writer or random writers
+        variation = config.get('variation')
+        idx_study = config.get('character_idx_study')
+        idx_recall = config.get('character_idx_recall')
+
+        alphabet = OmniglotAlphabet('./data', alphabet_name, True, False, idx_study, download=True, transform=image_tfms, target_transform=None)
+        alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, variation, idx_recall, download=True, transform=image_tfms,
+                                    target_transform=None)
+
+
+        # Initialise metrics
+        oneshot_metrics = OneshotMetrics()
+
+        # Load the pretrained model
         model = CLS(image_shape, config, device=device, writer=writer).to(device)
+        single_recall = config.get('test_single_characters')
 
-        # Ensure that pretrained model path doesn't exist so that training occurs
-        #pretrained_model_path = None
+        predictions = []
 
-        if train_from == 'scratch':
-            # Clear the directory
-            for file in os.listdir(previous_run_path):
-                path = os.path.join(previous_run_path, file)
-                try:
-                    os.unlink(os.path.join(path))
-                except Exception as e:
-                    print(f"Failed to remove file with path {path} due to exception {e}")
+        for idx, (study_set, recall_set) in pair_sequence_dataset:
+            study_data = [torch.cat((alphabet[int(a[0].item())][0], alphabet[int(a[1].item())][0]), 2) for a in study_set]
+            study_target_pairs = [(alphabet[int(a[0].item())][1], alphabet[int(a[1].item())][1]) for a in study_set]
 
-        elif train_from == 'latest':
-            model_path = os.path.join(previous_run_path, 'pretrained_model_*')
-            print(model_path)
-            # Find the latest file in the directory
-            latest = max(glob.glob(model_path), key=os.path.getctime)
+            study_data = torch.stack(study_data)
+            main_pairs = torch.unique(study_data, dim=0, return_counts=True)
+            main_pairs = torch.flatten(main_pairs[0], start_dim=1)
+            labels_study = list(set(study_target_pairs))
+            study_target = [labels_study.index(value) for value in study_target_pairs]
 
-            # Find the epoch that was stopped on
-            i = len(latest) - 4  # (from before the .pt)
-            latest_epoch = 0
-            while latest[i] != '_':
-                latest_epoch *= 10
-                latest_epoch += int(latest[i])
-                i -= 1
 
-            if latest_epoch < config['pretrain_epochs']:
-                start_epoch = latest_epoch + 1
+            study_target = torch.tensor(study_target, dtype=torch.long, device=device)
 
-            print("Attempting to find existing checkpoint")
-            if os.path.exists(latest):
-                try:
-                    model.load_state_dict(torch.load(latest))
-                except Exception as e:
-                     print("Failed to load model from path: {latest}. Please check path and try again due to exception {e}.")
-                     return
+            study_data = study_data.to(device)
+            study_target = study_target.to(device)
 
-    else:
-        summary_dir = utils.get_summary_dir(experiment + "/" + learning_type)
-        writer = SummaryWriter(log_dir=summary_dir)
-        model = CLS(image_shape, config, device=device, writer=writer).to(device)
+            single_characters = [torch.cat((alphabet_recall[a][0], torch.zeros(1, 52, 52)), 2) for a in range(0, characters)]
+            single_characters = torch.stack(single_characters)
+            recall_target_pairs = [(alphabet_recall[int(a[0].item())][1], alphabet_recall[int(a[1].item())][1]) for a in
+                                   recall_set]
+            labels_recall = list(set(recall_target_pairs))
+            recall_target = [labels_recall.index(value) for value in recall_target_pairs]
 
-    if not pretrained_model_path:
-        dataset = OmniglotAlphabet('./data', alphabet_name, False, writer_idx='any', download=True, transform=image_tfms,
-                                   target_transform=None)
+            if single_recall:
+                recall_data = single_characters.repeat(-(-batch_size//characters), 1, 1, 1)
+                recall_data = recall_data[0:batch_size]
+                recall_target = list(range(max(recall_target) + 1, max(recall_target) + 1 + characters))
+                recall_target = recall_target * -(-batch_size//characters)
+                del recall_target[batch_size:len(recall_target)]
+            else:
+                recall_data = [torch.cat((alphabet_recall[int(a[0].item())][0], alphabet_recall[int(a[1].item())][0]), 2)
+                           for a in recall_set]
+                del recall_data[0:characters]
 
-        val_size = round(VAL_SPLIT * len(dataset))
-        train_size = len(dataset) - val_size
+                recall_data = torch.stack(recall_data)
+                recall_data = torch.cat((single_characters, recall_data), 0)
 
-        train_set, val_set = torch.utils.data.random_split(dataset, [train_size, val_size])
+                del recall_target[0:characters]
+                recall_target = list(range(max(recall_target) + 1, max(recall_target) + 1 + characters)) + recall_target
 
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['pretrain_batch_size'], shuffle=True)
-        val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['pretrain_batch_size'], shuffle=True)
+            recall_data = recall_data.to(device)
+            recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
+            recall_target = recall_target.to(device)
 
-        # Pre-train the model
-        for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
+            # Reset to saved model
+            model.load_state_dict(torch.load(pretrained_model_path))
+            model.reset()
 
-            for batch_idx, (data, target) in enumerate(train_loader):
+            # Study
+            # --------------------------------------------------------------------------
+            for step in range(config['study_steps']):
+                study_train_losses, _ = model(study_data, study_target, mode='study')
+                study_train_loss = study_train_losses['stm']['memory']['loss']
 
-                if 0 < MAX_PRETRAIN_STEPS < batch_idx:
-                    print("Pretrain steps, {}, has exceeded max of {}.".format(batch_idx, MAX_PRETRAIN_STEPS))
-                    break
+                print('Losses step {}, ite {}: \t PR:{:.6f}\
+                    PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
+                                                                 study_train_loss['pr'].item(),
+                                                                 study_train_loss['pr_mismatch'].item(),
+                                                                 study_train_loss['pm_ec'].item()))
+                model(recall_data, recall_target, mode='study_validate')
 
-                # An empty image is add to each character (an empty pair character)
-                data = [torch.cat((a, torch.zeros(1, 52, 52)), 2) for a in data]
-                data = torch.stack(data)
-                labels = list(set(target))
-                target = torch.tensor([labels.index(value) for value in target])
-                data = data.to(device)
-                target = target.to(device)
-
-                losses, _ = model(data, labels=target if model.is_ltm_supervised() else None, mode='pretrain')
-                pretrain_loss = losses['ltm']['memory']['loss'].item()
-
-                if batch_idx % LOG_EVERY == 0:
-                    print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                        epoch, batch_idx, len(train_loader),
-                        100. * batch_idx / len(train_loader), pretrain_loss))
-
-                if batch_idx % VAL_EVERY == 0 or batch_idx == len(train_loader) - 1:
-                    logging.info("\t--- Start validation")
-
+                if step == config['initial_response_step'] or step == (config['study_steps']-1):
                     with torch.no_grad():
-                        for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
-
-                            if batch_idx_val >= MAX_VAL_STEPS:
-                                print("\tval batch steps, {}, has exceeded max of {}.".format(batch_idx_val,
-                                                                                              MAX_VAL_STEPS))
-                                break
-
-                            val_data = [torch.cat((a, torch.zeros(1, 52, 52)), 2) for a in val_data]
-                            val_data = torch.stack(val_data)
-
-                            val_data = val_data.to(device)
-                            target = target.to(device)
-
-                            val_losses, _ = model(val_data, labels=val_target if model.is_ltm_supervised() else None,
-                                                  mode='validate')
-                            val_pretrain_loss = val_losses['ltm']['memory']['loss'].item()
-
-                            if batch_idx_val % LOG_EVERY == 0:
-                                print('\tValidation for Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                    epoch, batch_idx_val, len(val_loader),
-                                    100. * batch_idx_val / len(val_loader), val_pretrain_loss))
-
-            if epoch % SAVE_EVERY == 0:
-                pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
-                print('Saving model to:', pretrained_model_path)
-                torch.save(model.state_dict(), pretrained_model_path)
-
-    # Study and Recall
-    # ---------------------------------------------------------------------------
-    print('-------- Few-shot Evaluation (Study and Recall) ---------')
-
-    characters = config.get('characters')
-    length = config.get('sequence_length')
-
-    # Create sequence of pairs
-    sequence_study = SequenceGenerator(characters, length, learning_type)
-    sequence_recall = SequenceGenerator(characters, length, learning_type)
-
-    sequence_study_tensor = torch.FloatTensor(sequence_study.sequence)
-    sequence_recall_tensor = torch.FloatTensor(sequence_recall.sequence)
-    study_loader = torch.utils.data.DataLoader(sequence_study_tensor, batch_size=config['study_batch_size'], shuffle=False)
-    recall_loader = torch.utils.data.DataLoader(sequence_recall_tensor, batch_size=config['study_batch_size'], shuffle=False)
-
-    pair_sequence_dataset = enumerate(zip(study_loader, recall_loader))
-
-    # Load images from the selected alphabet from a specific writer or random writers
-    variation = config.get('variation')
-    idx_study = config.get('character_idx_study')
-    idx_recall = config.get('character_idx_recall')
-
-    alphabet = OmniglotAlphabet('./data', alphabet_name, True, False, idx_study, download=True, transform=image_tfms, target_transform=None)
-    alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, variation, idx_recall, download=True, transform=image_tfms,
-                                target_transform=None)
+                        _, recall_outputs = model(recall_data, recall_target, mode='recall')
+                        cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
+                        recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"]["decoding"], start_dim=1)
+                        similarity = [[cos(a, b) for b in main_pairs] for a in recall_outputs_flat]
+                        similarity_idx = [t.index(max(t)) for t in similarity]
+                        predictions.extend([[labels_study[a] for a in similarity_idx[0:characters]]])
 
 
-    # Initialise metrics
-    oneshot_metrics = OneshotMetrics()
 
-    # Load the pretrained model
-    model = CLS(image_shape, config, device=device, writer=writer).to(device)
+            # Recall
+            # --------------------------------------------------------------------------
+            with torch.no_grad():
 
-    for idx, (study_set, recall_set) in pair_sequence_dataset:
-        study_data = [torch.cat((alphabet[int(a[0].item())][0], alphabet[int(a[1].item())][0]), 2) for a in study_set]
-        study_target_pairs = [(alphabet[int(a[0].item())][1], alphabet[int(a[1].item())][1]) for a in study_set]
-        study_target = []
-        for idx_pair, (a, b) in enumerate(study_target_pairs):
-            tmp = np.zeros(characters)
-            np.put(tmp, [a, b], 1)
-            study_target.extend([tmp])
+                if 'metrics' in config and config['metrics']:
+                    metrics_config = config['metrics']
 
-        study_data = torch.stack(study_data)
-        study_target = torch.tensor(study_target, dtype=torch.long, device=device)
+                    metrics_len = [len(value) for key, value in metrics_config.items()]
+                    assert all(x == metrics_len[0] for x in metrics_len), 'Mismatch in metrics config'
 
-        study_data = study_data.to(device)
-        study_target = study_target.to(device)
+                    for i in range(metrics_len[0]):
+                        primary_feature = utils.find_json_value(metrics_config['primary_feature_names'][i], model.features)
+                        primary_label = utils.find_json_value(metrics_config['primary_label_names'][i], model.features)
+                        secondary_feature = utils.find_json_value(metrics_config['secondary_feature_names'][i],
+                                                                  model.features)
+                        secondary_label = utils.find_json_value(metrics_config['secondary_label_names'][i], model.features)
+                        comparison_type = metrics_config['comparison_types'][i]
+                        prefix = metrics_config['prefixes'][i]
 
-        recall_data = [torch.cat((alphabet_recall[int(a[0].item())][0], alphabet_recall[int(a[1].item())][0]), 2)
-                       for a in recall_set]
-        recall_target_pairs = [(alphabet_recall[int(a[0].item())][1], alphabet_recall[int(a[1].item())][1]) for a in
-                               recall_set]
+                        oneshot_metrics.compare(prefix,
+                                                primary_feature, primary_label,
+                                                secondary_feature, secondary_label,
+                                                comparison_type=comparison_type)
 
-        del recall_data[0:characters]
+                # PR Accuracy (study first) - this is the version used in the paper
+                oneshot_metrics.compare(prefix='pr_sf_',
+                                        primary_features=model.features['study']['stm_pr'],
+                                        primary_labels=model.features['study']['labels'],
+                                        secondary_features=model.features['recall']['stm_pr'],
+                                        secondary_labels=model.features['recall']['labels'],
+                                        comparison_type='match_mse')
 
-        recall_data = torch.stack(recall_data)
-        single_characters = [torch.cat((alphabet_recall[a][0], torch.zeros(1, 52, 52)), 2) for a in range(0, characters)]
-        single_characters = torch.stack(single_characters)
-        recall_data = torch.cat((single_characters, recall_data), 0)
+                # oneshot_metrics.compare(prefix='pr_rf_',
+                #                         primary_features=model.features['recall']['stm_pr'],
+                #                         primary_labels=model.features['recall']['labels'],
+                #                         secondary_features=model.features['study']['stm_pr'],
+                #                         secondary_labels=model.features['study']['labels'],
+                #                         comparison_type='match_mse')
 
-        recall_target = []
-        for idx_pair, (a, b) in enumerate(recall_target_pairs):
-            tmp = np.zeros(characters)
-            np.put(tmp, [a, b], 1)
-            recall_target.extend([tmp])
-        del recall_target[0:characters-1]
+                oneshot_metrics.report()
 
-        recall_individual = []
-        for a in range(characters):
-            tmp = np.zeros(characters)
-            np.put(tmp, a, 1)
-            recall_individual.extend([tmp])
+                summary_names = [
+                    'study_inputs',
+                    'study_stm_pr',
+                    'study_stm_pc',
 
-        recall_target = recall_individual + recall_target
-        recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
+                    'recall_inputs',
+                    'recall_stm_pr',
+                    'recall_stm_pc',
+                    'recall_stm_recon'
+                ]
 
-        recall_data = recall_data.to(device)
-        recall_target = recall_target.to(device)
+                summary_images = []
+                for name in summary_names:
+                    mode_key, feature_key = name.split('_', 1)
 
-        assert len(study_data) == len(recall_data)
+                    summary_features = model.features[mode_key][feature_key]
+                    if len(summary_features.shape) > 2:
+                        summary_features = summary_features.permute(0, 2, 3, 1)
 
-        # Reset to saved model
-        model.load_state_dict(torch.load(pretrained_model_path))
-        model.reset()
+                    summary_shape, _ = utils.square_image_shape_from_1d(np.prod(summary_features.data.shape[1:]))
+                    summary_shape[0] = summary_features.data.shape[0]
 
-        # Study
-        # --------------------------------------------------------------------------
-        for step in range(config['study_steps']):
-            study_train_losses, outputs_study = model(study_data, study_target, mode='study')
-            study_train_loss = study_train_losses['stm']['memory']['loss']
+                    summary_image = (name, summary_features, summary_shape)
+                    summary_images.append(summary_image)
 
-            print('Losses step {}, ite {}: \t PR:{:.6f}\
-                PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
-                                                             study_train_loss['pr'].item(),
-                                                             study_train_loss['pr_mismatch'].item(),
-                                                             study_train_loss['pm_ec'].item()))
+                utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
 
-            model(recall_data, recall_target, mode='study_validate')
+        # Save results
+        predictions_initial = predictions[0:config['study_steps']:2]
+        predictions_settled = predictions[1:config['study_steps']:2]
 
-        # Recall
-        # --------------------------------------------------------------------------
-        with torch.no_grad():
-            model(recall_data, recall_target, mode='recall')
+        with open(main_summary_dir + '/predictions_initial' + str(seed) + '.csv', 'w', encoding='UTF8') as f:
+            writer_file = csv.writer(f)
+            writer_file.writerows(predictions_initial)
 
-            if 'metrics' in config and config['metrics']:
-                metrics_config = config['metrics']
+        with open(main_summary_dir + '/predictions_settled'+str(seed)+'.csv', 'w', encoding='UTF8') as f:
+            writer_file = csv.writer(f)
+            writer_file.writerows(predictions_settled)
 
-                metrics_len = [len(value) for key, value in metrics_config.items()]
-                assert all(x == metrics_len[0] for x in metrics_len), 'Mismatch in metrics config'
+        oneshot_metrics.report_averages()
 
-                for i in range(metrics_len[0]):
-                    primary_feature = utils.find_json_value(metrics_config['primary_feature_names'][i], model.features)
-                    primary_label = utils.find_json_value(metrics_config['primary_label_names'][i], model.features)
-                    secondary_feature = utils.find_json_value(metrics_config['secondary_feature_names'][i],
-                                                              model.features)
-                    secondary_label = utils.find_json_value(metrics_config['secondary_label_names'][i], model.features)
-                    comparison_type = metrics_config['comparison_types'][i]
-                    prefix = metrics_config['prefixes'][i]
-
-                    oneshot_metrics.compare(prefix,
-                                            primary_feature, primary_label,
-                                            secondary_feature, secondary_label,
-                                            comparison_type=comparison_type)
-
-            # PR Accuracy (study first) - this is the version used in the paper
-            oneshot_metrics.compare(prefix='pr_sf_',
-                                    primary_features=model.features['study']['stm_pr'],
-                                    primary_labels=model.features['study']['labels'],
-                                    secondary_features=model.features['recall']['stm_pr'],
-                                    secondary_labels=model.features['recall']['labels'],
-                                    comparison_type='match_mse')
-
-            # oneshot_metrics.compare(prefix='pr_rf_',
-            #                         primary_features=model.features['recall']['stm_pr'],
-            #                         primary_labels=model.features['recall']['labels'],
-            #                         secondary_features=model.features['study']['stm_pr'],
-            #                         secondary_labels=model.features['study']['labels'],
-            #                         comparison_type='match_mse')
-
-            oneshot_metrics.report()
-
-            summary_names = [
-                'study_inputs',
-                'study_stm_pr',
-                'study_stm_pc',
-
-                'recall_inputs',
-                'recall_stm_pr',
-                'recall_stm_pc',
-                'recall_stm_recon'
-            ]
-
-            summary_images = []
-            for name in summary_names:
-                mode_key, feature_key = name.split('_', 1)
-
-                summary_features = model.features[mode_key][feature_key]
-                if len(summary_features.shape) > 2:
-                    summary_features = summary_features.permute(0, 2, 3, 1)
-
-                summary_shape, _ = utils.square_image_shape_from_1d(np.prod(summary_features.data.shape[1:]))
-                summary_shape[0] = summary_features.data.shape[0]
-
-                summary_image = (name, summary_features, summary_shape)
-                summary_images.append(summary_image)
-
-            utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
-
-    oneshot_metrics.report_averages()
-
-    writer.flush()
-    writer.close()
-
+        writer.flush()
+        writer.close()
 
 if __name__ == '__main__':
     main()

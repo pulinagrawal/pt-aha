@@ -41,6 +41,7 @@ be CD. """
            seq.extend([next_pair[idx]])
            core_idx = np.where(list(next_pair[idx])[1] == first)[0][0]
            seq.extend([self.core_sequence[core_idx]])
+        del seq[len(seq)-1]
     elif self.type == "episodic":
         core_idx = np.random.randint(0, self.characters / 2, self.length)
         seq = [(first[a], second[a]) for a in core_idx]
