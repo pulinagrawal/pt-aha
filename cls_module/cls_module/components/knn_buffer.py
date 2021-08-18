@@ -6,7 +6,7 @@ import torch.nn as nn
 
 class KNNBuffer(nn.Module):
   """
-  A simeple buffer implementation with K-nearest neighbour lookup.
+  A simple buffer implementation with K-nearest neighbour lookup.
   """
 
   def __init__(self, input_shape, target_shape, config):
@@ -25,15 +25,19 @@ class KNNBuffer(nn.Module):
     self.buffer_mode = 'override'
 
   def shift_inputs(self, tensor):
-    """ From sparse r[0,1] to b[-1,1]"""
+    """From sparse r[0,1] to b[-1,1]"""
     tensor = (tensor > 0).float()
     tensor[tensor == 0] = -1
     return tensor
 
   def forward(self, inputs):
     """
-    During training, store the inputs from PS into the buffer. At test time, use the inputs from the PR to lookup the
-    matching PS pattern from the buffer using K-nearest neighbour with K=1.
+    During training, store the training pattern inputs into the buffer.
+    Depending on the buffer_mode, the buffer can be either overriden every step
+    or continously appended.
+
+    At test time, use the test pattern inputs to lookup the matching patterns
+    from the buffer using K-nearest neighbour with K=1.
     """
     if self.training:
       # Range shift from unit to signed unit
