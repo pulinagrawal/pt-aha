@@ -17,7 +17,7 @@ import torch.nn.functional as F
 from cls_module.memory.interface import MemoryInterface
 
 from cls_module.components.dg import DG
-from cls_module.memory.stm.aha.pc_buffer import PCBuffer
+from cls_module.components.knn_buffer import KNNBuffer
 from cls_module.memory.stm.aha.perforant_pr import PerforantPR
 from cls_module.memory.stm.aha.perforant_hebb import PerforantHebb
 
@@ -62,59 +62,9 @@ class AHA(MemoryInterface):
 
   def reset(self):
     """Reset modules and optimizers."""
-    resets = {
-        'pr': {
-            'params': True,
-            'optim': False,  # TF-AHA did not reset the PR optimizer
-        },
-
-        # No point resetting the DG as it's not trainable anyway
-        # This also ensures its consistent between between runs
-        'dg': {
-            'params': False,
-            'optim': False
-        },
-        'pm': {
-            'params': True,
-            'optim': True
-        },
-       'pm_ec': {
-            'params': True,
-            'optim': True
-        },
-        'dg_ca3': {
-            'params': True,
-            'optim': True
-        },
-        'ec_ca3': {
-            'params': True,
-            'optim': True
-        },
-        'ca3_ca1': {
-            'params': True,
-            'optim': True
-        },
-        'ca1': {
-            'params': False,
-            'optim': False
-        }
-    }
-
-    for name, module in self.named_children():
-      if name not in resets.keys():
-        continue
-
-      # Reset the module parameters
-      if hasattr(module, 'reset_parameters') and resets[name]['params']:
-        # print(name, '=>', 'resetting parameters')
-        module.reset_parameters()
-
-      # Reset the module optimizer
-      optimizer_name = name + '_optimizer'
-      if hasattr(self, optimizer_name) and resets[name]['optim']:
-        # print(name, '=>', 'resetting optimizer')
-        module_optimizer = getattr(self, optimizer_name)
-        module_optimizer.state = defaultdict(dict)
+    for _, module in self.named_children():
+      if hasattr(module, 'reset'):
+        module.reset()
 
   def build(self):
     """Build AHA as short-term memory module."""
@@ -125,17 +75,19 @@ class AHA(MemoryInterface):
 
     # Build the Perforant Pathway
     if self.is_hebbian_perforant():
-      self.perforant_hebb = PerforantHebb(ec_shape=[1, self.input_shape],
+      self.perforant_hebb = PerforantHebb(ec_shape=self.input_shape,
                                           dg_shape=dg_output_shape,
-                                          ca3_shape=[1, self.config['ca3']['num_units']])
+                                          ca3_shape=dg_output_shape,
+                                          config=self.config['perforant_hebb'])
     else:
-      self.perforant_pr = PerforantPR(self.input_shape, dg_output_shape, self.config['pr'])
+      self.perforant_pr = PerforantPR(self.input_shape, dg_output_shape, self.config['perforant_pr'])
 
     # Build the CA3
-    self.ca3 = PCBuffer(input_shape=dg_output_shape, target_shape=dg_output_shape, config=self.config['ca3'])
+    self.ca3 = KNNBuffer(input_shape=dg_output_shape, target_shape=dg_output_shape, config=self.config['ca3'])
     ca3_output_shape = dg_output_shape
 
-    # Build Monosynaptic Pathway
+    # Build the Monosynaptic Pathway
+    # Optionally between a bioligically plausible MSP (CA1, CA3 => CA1 pathways) or a simple pattern mapper
     if self.config.get('msp_type', None) == 'ca1':
       self.msp = MonosynapticPathway(ca3_shape=ca3_output_shape, ec_shape=self.input_shape, config=self.config['msp'])
     else:

@@ -29,15 +29,10 @@ class PerforantPR(nn.Module):
                                 weight_decay=self.config['weight_decay'])
 
   def reset(self):
-    for name, module in self.named_children():
-      # Reset the module parameters
-      if hasattr(module, 'reset_parameters') and self.reset_params:
-        print(name, '=>', 'resetting parameters')
-        module.reset_parameters()
+    if self.reset_params:
+      self.model.reset_parameters()
 
-    # Reset the module optimizer
     if self.reset_optim:
-      print('PerforantPR', '=>', 'resetting optimizer')
       self.optimizer.state = defaultdict(dict)
 
   def forward(self, inputs, targets):

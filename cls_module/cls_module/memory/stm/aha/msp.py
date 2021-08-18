@@ -41,20 +41,16 @@ class MonosynapticPathway(nn.Module):
 
   def reset(self):
     if self.ca1_reset_params:
-      print('ca1', '=>', 'resetting parameters')
       self.ca1.reset_parameters()
 
     if self.ca3_ca1_reset_params:
-      print('ca3_ca1', '=>', 'resetting parameters')
       self.ca3_ca1.reset_parameters()
 
     # Reset the module optimizer
     if self.ca1_reset_optim:
-      print('CA1', '=>', 'resetting optimizer')
       self.ca1_optimizer.state = defaultdict(dict)
 
     if self.ca3_ca1_reset_optim:
-      print('CA3:CA1', '=>', 'resetting optimizer')
       self.ca3_ca1_optimizer.state = defaultdict(dict)
 
   def forward_ca1(self, inputs, targets):
@@ -104,9 +100,7 @@ class MonosynapticPathway(nn.Module):
     ca1_loss, ca1_outputs = self.forward_ca1(inputs=ec_inputs, targets=ec_inputs)
     ca3_ca1_target = ca1_outputs['encoding']
 
-    ca3_ca1_loss, ca3_ca1_outputs = self.forward_ae(name='ca3_ca1',
-                                                            inputs=ca3_inputs,
-                                                            targets=ca3_ca1_target)
+    ca3_ca1_loss, ca3_ca1_outputs = self.forward_ca3_ca1(inputs=ca3_inputs, targets=ca3_ca1_target)
 
     # During recall, the CA3:CA1 will drive CA1 reconstruction
     if not self.training and self.config['ca1']['ca3_recall']:

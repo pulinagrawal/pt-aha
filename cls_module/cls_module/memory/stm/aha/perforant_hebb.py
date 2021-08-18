@@ -23,30 +23,27 @@ class PerforantHebb(nn.Module):
 
     self.config = config
     self.reset_params = self.config.get('reset_params', True)
-    self.reset_optim = self.config.get('reset_optim', False)
+    self.reset_optim = self.config.get('reset_optim', True)
 
     ec_size = np.prod(ec_shape[1:])
     dg_size = np.prod(dg_shape[1:])
     ca3_size = np.prod(ca3_shape[1:])
 
-    self.dg_ca3 = LocalConnection(dg_size, ca3_size, bias=False).to(self.device)
+    self.dg_ca3 = LocalConnection(dg_size, ca3_size, bias=False)
     self.dg_ca3_optimizer = LocalOptim(self.dg_ca3.named_parameters(), lr=self.config['learning_rate'])
 
-    self.ec_ca3 = LocalConnection(ec_size, ca3_size, bias=False).to(self.device)
+    self.ec_ca3 = LocalConnection(ec_size, ca3_size, bias=False)
     self.ec_ca3_optimizer = LocalOptim(self.ec_ca3.named_parameters(), lr=self.config['learning_rate'])
 
     self.learning_rule = OjaLeabraRule()
 
   def reset(self):
-    for name, module in self.named_children():
-      # Reset the module parameters
-      if hasattr(module, 'reset_parameters') and self.reset_params:
-        print(name, '=>', 'resetting parameters')
-        module.reset_parameters()
+    if self.reset_params:
+      self.dg_ca3.reset_parameters()
+      self.ec_ca3.reset_parameters()
 
     # Reset the module optimizer
     if self.reset_optim:
-      print('PerforantHebb', '=>', 'resetting optimizer')
       self.dg_ca3_optimizer.state = defaultdict(dict)
       self.ec_ca3_optimizer.state = defaultdict(dict)
 

@@ -29,12 +29,9 @@ class PatternMapper(nn.Module):
 
   def reset(self):
     if self.reset_params:
-      print('PatternMapper', '=>', 'resetting parameters')
       self.model.reset_parameters()
 
-    # Reset the module optimizer
     if self.reset_optim:
-      print('PatternMapper', '=>', 'resetting optimizer')
       self.optimizer.state = defaultdict(dict)
 
   def forward(self, inputs, targets):
