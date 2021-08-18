@@ -1,0 +1,214 @@
+"""AHA class."""
+
+import logging
+from collections import defaultdict
+from os import pathconf
+from cls_module.memory.stm.aha.msp import MonosynapticPathway
+from cls_module.memory.stm.aha.perforant_hebb import PerforantHebb
+from cls_module.memory.stm.aha.pm import PatternMapper
+
+import numpy as np
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+
+from cls_module.memory.interface import MemoryInterface
+
+from cls_module.components.dg import DG
+from cls_module.memory.stm.aha.pc_buffer import PCBuffer
+from cls_module.memory.stm.aha.perforant_pr import PerforantPR
+from cls_module.memory.stm.aha.perforant_hebb import PerforantHebb
+
+from cerenaut_pt_core.components.simple_autoencoder import SimpleAutoencoder
+
+
+class AHA(MemoryInterface):
+  """
+  An implementation of a short-term memory module using a AHA.
+
+    There are two major modes. 
+    1) Standard CLS, with Hebbian learning in the perforant path
+  
+    Build:
+    DG -> CA3: set of weights (randomly initialised)
+    EC -> CA3: set of weights (randomly initialised)
+    For CA3 neurons, it's a weighted sum from two sets of weights.
+
+    Forward:
+    Propagate
+    Update weights given pre and post synaptic activity
+
+    2) Our approach, with error driven learning in perforant pathconf
+    Build:
+    DG -> CA3: 1 to 1 clamp
+    EC -> CA3 = PR network
+
+    Forward:
+    Propagate
+    PR: BP Optimization step over
+  """
+
+  global_key = 'stm'
+  local_key = 'aha'
+
+  def is_hebbian_perforant(self):
+    k = 'hebbian_perforant'
+    if k in self.config and self.config[k]:
+      return True
+
+    return False
+
+  def reset(self):
+    """Reset modules and optimizers."""
+    resets = {
+        'pr': {
+            'params': True,
+            'optim': False,  # TF-AHA did not reset the PR optimizer
+        },
+
+        # No point resetting the DG as it's not trainable anyway
+        # This also ensures its consistent between between runs
+        'dg': {
+            'params': False,
+            'optim': False
+        },
+        'pm': {
+            'params': True,
+            'optim': True
+        },
+       'pm_ec': {
+            'params': True,
+            'optim': True
+        },
+        'dg_ca3': {
+            'params': True,
+            'optim': True
+        },
+        'ec_ca3': {
+            'params': True,
+            'optim': True
+        },
+        'ca3_ca1': {
+            'params': True,
+            'optim': True
+        },
+        'ca1': {
+            'params': False,
+            'optim': False
+        }
+    }
+
+    for name, module in self.named_children():
+      if name not in resets.keys():
+        continue
+
+      # Reset the module parameters
+      if hasattr(module, 'reset_parameters') and resets[name]['params']:
+        # print(name, '=>', 'resetting parameters')
+        module.reset_parameters()
+
+      # Reset the module optimizer
+      optimizer_name = name + '_optimizer'
+      if hasattr(self, optimizer_name) and resets[name]['optim']:
+        # print(name, '=>', 'resetting optimizer')
+        module_optimizer = getattr(self, optimizer_name)
+        module_optimizer.state = defaultdict(dict)
+
+  def build(self):
+    """Build AHA as short-term memory module."""
+
+    # Build the Dentae Gyrus
+    self.dg = DG(self.input_shape, self.config['dg']).to(self.device)
+    dg_output_shape = [1, self.config['dg']['num_units']]
+
+    # Build the Perforant Pathway
+    if self.is_hebbian_perforant():
+      self.perforant_hebb = PerforantHebb(ec_shape=[1, self.input_shape],
+                                          dg_shape=dg_output_shape,
+                                          ca3_shape=[1, self.config['ca3']['num_units']])
+    else:
+      self.perforant_pr = PerforantPR(self.input_shape, dg_output_shape, self.config['pr'])
+
+    # Build the CA3
+    self.ca3 = PCBuffer(input_shape=dg_output_shape, target_shape=dg_output_shape, config=self.config['ca3'])
+    ca3_output_shape = dg_output_shape
+
+    # Build Monosynaptic Pathway
+    if self.config.get('msp_type', None) == 'ca1':
+      self.msp = MonosynapticPathway(ca3_shape=ca3_output_shape, ec_shape=self.input_shape, config=self.config['msp'])
+    else:
+      self.pm = PatternMapper(ca3_output_shape, self.target_shape, self.config['pm_ec'])
+      self.pm_ec = PatternMapper(ca3_output_shape, self.input_shape, self.config['pm_ec'])
+
+    # Build the Label Learner module
+    if 'classifier' in self.config:
+      self.build_classifier(input_shape=ca3_output_shape)
+
+    self.output_shape = ca3_output_shape
+
+  def forward_memory(self, inputs, targets, labels):
+    """Perform one step using the entire system (i.e. all sub-modules of AHA)."""
+    del labels
+
+    losses = {}
+    outputs = {}
+    features = {}
+
+    outputs['dg'] = self.dg(inputs)
+    features['dg'] = outputs['dg'].detach().cpu()
+
+    # Compute DG Overlap
+    overlap = self.dg.compute_overlap(outputs['dg'])
+    losses['dg_overlap'] = overlap.sum()
+
+    # Perforant Pathway: Hebbian Learning
+    if self.is_hebbian_perforant():
+      ca3_cue, losses['dg_ca3'], losses['ec_ca3'], losses['ca3_cue'] = self.perforant_hebb(ec_inputs=inputs, dg_inputs=outputs['dg'])
+
+    # Perforant Pathway: Error-Driven Learning
+    if not self.is_hebbian_perforant():
+      pr_targets = outputs['dg']
+      # pr_targets = outputs['dg'] if self.training else self.pc_buffer_batch
+      losses['pr'], outputs['pr'] = self.perforant_pr(inputs=inputs, targets=pr_targets)
+      features['pr'] = outputs['pr']['pr_out'].detach().cpu()
+
+      # Compute PR Mismatch
+      pr_out = outputs['pr']['pr_out']
+      pr_batch_size = pr_out.shape[0]
+      losses['pr_mismatch'] = torch.sum(torch.abs(pr_targets - pr_out)) / pr_batch_size
+
+      ca3_cue = outputs['dg'] if self.training else outputs['pr']['z_cue']
+
+    # CA3
+    outputs['ca3'] = self.ca3(inputs=ca3_cue)
+    features['ca3'] = outputs['ca3'].detach().cpu()
+
+    outputs['encoding'] = outputs['ca3'].detach()
+    outputs['output'] = outputs['ca3'].detach()
+
+    # Monosynaptic Pathway
+    if self.config.get('msp_type', None) == 'ca1':
+      # During study, EC will drive the CA1
+      losses['ca1'], outputs['ca1'], losses['ca3_ca1'], outputs['ca3_ca1'] = self.msp(ec_inputs=inputs,
+                                                                                      ca3_inputs=outputs['ca3'])
+
+      outputs['decoding'] = None
+      features['recon'] = None
+
+      outputs['decoding_ec'] = outputs['ca1']['decoding'].detach()
+      features['recon_ec'] =  outputs['ca1']['decoding'].detach().cpu()
+    else:
+      losses['pm'], outputs['pm'] = self.pm(inputs=outputs['ca3'], targets=targets)
+      losses['pm_ec'], outputs['pm_ec'] = self.pm_ec(inputs=outputs['ca3'], targets=inputs)
+
+      outputs['decoding'] = outputs['pm']['decoding'].detach()
+      features['recon'] = outputs['pm']['decoding'].detach().cpu()
+
+      outputs['decoding_ec'] = outputs['pm_ec']['decoding'].detach()
+      features['recon_ec'] =  outputs['pm_ec']['decoding'].detach().cpu()
+
+    self.features = features
+
+    return losses, outputs
