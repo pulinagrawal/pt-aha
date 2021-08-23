@@ -51,7 +51,10 @@
   },
   "ec":{},
   "stm": {
-    "ps": {
+    "msp_type": "pm",
+    "hebbian_perforant": false,
+
+    "dg": {
         "inhibition_decay": 0.95,
         "knockout_rate": 0.25,
         "init_scale": 10.0,
@@ -59,10 +62,10 @@
         "sparsity": 10,
         "use_stub": false
     },
-    "pc": {
+    "ca3": {
         "shift_range": false
     },
-    "pr": {
+    "perforant_pr": {
         "learning_rate": 0.01,
         "weight_decay": 0.000025,
 

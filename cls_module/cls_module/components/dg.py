@@ -25,7 +25,6 @@ class DG(nn.Module):
     self.layer.weight.requires_grad = False
 
     self.reset_parameters()
-    # nn.init.xavier_normal_(self.layer.weight)
 
   def reset_parameters(self):
     """Custom initialization *does* make a big difference to orthogonality, even with inhibition"""

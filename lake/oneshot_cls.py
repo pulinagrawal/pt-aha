@@ -278,12 +278,12 @@ def main():
       study_train_losses, _ = model(study_data, study_target, mode='study')
       study_train_loss = study_train_losses['stm']['memory']['loss']
 
-      if all (k in study_train_loss for k in ('pr', 'pm_ec')):
-        print('Losses step {}, ite {}: \t PR:{:.6f}\
-              PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
-                                                              study_train_loss['pr'].item(),
-                                                              study_train_loss['pr_mismatch'].item(),
-                                                              study_train_loss['pm_ec'].item()))
+      # if all (k in study_train_loss for k in ('pr', 'pm_ec')):
+      #   print('Losses step {}, ite {}: \t PR:{:.6f}\
+      #         PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
+      #                                                         study_train_loss['pr'].item(),
+      #                                                         study_train_loss['pr_mismatch'].item(),
+      #                                                         study_train_loss['pm_ec'].item()))
 
       model(recall_data, recall_target, mode='study_validate')
 
@@ -320,24 +320,16 @@ def main():
                                 secondary_labels=model.features['recall']['labels'],
                                 comparison_type='match_mse')
 
-        # oneshot_metrics.compare(prefix='pr_rf_',
-        #                         primary_features=model.features['recall']['stm_pr'],
-        #                         primary_labels=model.features['recall']['labels'],
-        #                         secondary_features=model.features['study']['stm_pr'],
-        #                         secondary_labels=model.features['study']['labels'],
-        #                         comparison_type='match_mse')
-
-
       oneshot_metrics.report()
 
       summary_names = [
         'study_inputs',
         'study_stm_pr',
-        'study_stm_pc',
+        'study_stm_ca3',
 
         'recall_inputs',
         'recall_stm_pr',
-        'recall_stm_pc',
+        'recall_stm_ca3',
         'recall_stm_recon'
       ]
 
