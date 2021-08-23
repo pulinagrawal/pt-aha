@@ -54,11 +54,7 @@ class AHA(MemoryInterface):
   local_key = 'aha'
 
   def is_hebbian_perforant(self):
-    k = 'hebbian_perforant'
-    if k in self.config and self.config[k]:
-      return True
-
-    return False
+    return self.config('hebbian_perforant', False)
 
   def reset(self):
     """Reset modules and optimizers."""
