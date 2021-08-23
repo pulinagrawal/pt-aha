@@ -75,12 +75,12 @@ class AHA(MemoryInterface):
 
     # Build the Perforant Pathway
     if self.is_hebbian_perforant():
-      self.perforant_hebb = PerforantHebb(ec_shape=self.input_shape,
+      self.perforant = PerforantHebb(ec_shape=self.input_shape,
                                           dg_shape=dg_output_shape,
                                           ca3_shape=dg_output_shape,
                                           config=self.config['perforant_hebb'])
     else:
-      self.perforant_pr = PerforantPR(self.input_shape, dg_output_shape, self.config['perforant_pr'])
+      self.perforant = PerforantPR(self.input_shape, dg_output_shape, self.config['perforant_pr'])
 
     # Build the CA3
     self.ca3 = KNNBuffer(input_shape=dg_output_shape, target_shape=dg_output_shape, config=self.config['ca3'])
@@ -117,13 +117,13 @@ class AHA(MemoryInterface):
 
     # Perforant Pathway: Hebbian Learning
     if self.is_hebbian_perforant():
-      ca3_cue, losses['dg_ca3'], losses['ec_ca3'], losses['ca3_cue'] = self.perforant_hebb(ec_inputs=inputs, dg_inputs=outputs['dg'])
+      ca3_cue, losses['dg_ca3'], losses['ec_ca3'], losses['ca3_cue'] = self.perforant(ec_inputs=inputs, dg_inputs=outputs['dg'])
 
     # Perforant Pathway: Error-Driven Learning
     if not self.is_hebbian_perforant():
       pr_targets = outputs['dg']
       # pr_targets = outputs['dg'] if self.training else self.pc_buffer_batch
-      losses['pr'], outputs['pr'] = self.perforant_pr(inputs=inputs, targets=pr_targets)
+      losses['pr'], outputs['pr'] = self.perforant(inputs=inputs, targets=pr_targets)
       features['pr'] = outputs['pr']['pr_out'].detach().cpu()
 
       # Compute PR Mismatch
