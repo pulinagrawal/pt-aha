@@ -1,10 +1,8 @@
 import os, re
 import matplotlib.pyplot as plt
-import matplotlib.colors as color
 import seaborn as sns
 import torch
 import csv
-#import pandas as pd
 experiment = 'pairs_structure'
 type = 'statistical'
 date = '20210824-181923'
