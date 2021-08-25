@@ -7,6 +7,7 @@ import utils
 import torch
 import torch.nn
 import numpy as np
+from scipy import stats
 import glob
 from torch.utils.tensorboard import SummaryWriter
 from cls_module.cls import CLS
@@ -212,6 +213,10 @@ def main():
         alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, variation, idx_recall, download=True, transform=image_tfms,
                                     target_transform=None)
 
+        labels_study = sequence_study.core_SL_sequence
+        main_pairs = torch.stack([torch.cat((alphabet[int(a[0])][0], alphabet[int(a[1])][0]), 2)
+                                  for a in labels_study], 0)
+        main_pairs_flat = torch.flatten(main_pairs, start_dim=1)
 
         # Initialise metrics
         oneshot_metrics = OneshotMetrics()
@@ -221,18 +226,14 @@ def main():
         single_recall = config.get('test_single_characters')
 
         predictions = []
-
+        pearson_r_tensor = torch.zeros((characters, characters))
+        pearson_r_tensor = pearson_r_tensor[None, :, :]
         for idx, (study_set, recall_set) in pair_sequence_dataset:
             study_data = [torch.cat((alphabet[int(a[0].item())][0], alphabet[int(a[1].item())][0]), 2) for a in study_set]
             study_target_pairs = [(alphabet[int(a[0].item())][1], alphabet[int(a[1].item())][1]) for a in study_set]
 
             study_data = torch.stack(study_data)
-            main_pairs = torch.unique(study_data, dim=0, return_counts=True)
-            main_pairs = torch.flatten(main_pairs[0], start_dim=1)
-            labels_study = list(set(study_target_pairs))
             study_target = [labels_study.index(value) for value in study_target_pairs]
-
-
             study_target = torch.tensor(study_target, dtype=torch.long, device=device)
 
             study_data = study_data.to(device)
@@ -253,7 +254,7 @@ def main():
                 del recall_target[batch_size:len(recall_target)]
             else:
                 recall_data = [torch.cat((alphabet_recall[int(a[0].item())][0], alphabet_recall[int(a[1].item())][0]), 2)
-                           for a in recall_set]
+                               for a in recall_set]
                 del recall_data[0:characters]
 
                 recall_data = torch.stack(recall_data)
@@ -283,15 +284,21 @@ def main():
                                                                  study_train_loss['pm_ec'].item()))
                 model(recall_data, recall_target, mode='study_validate')
 
-                if step == config['initial_response_step'] or step == (config['study_steps']-1):
+                if step == (config['initial_response_step']-1) or step == (config['study_steps']-1):
                     with torch.no_grad():
                         _, recall_outputs = model(recall_data, recall_target, mode='recall')
                         cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
                         recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"]["decoding"], start_dim=1)
-                        similarity = [[cos(a, b) for b in main_pairs] for a in recall_outputs_flat]
+                        #testA = recall_outputs_flat[0]
+                        #similarity1 = cos(testA, main_pairs_flat[0])
+                        #print(similarity1)
+                        recall_outputs_flat = recall_outputs_flat[0:characters]
+                        pearson_r = [[stats.pearsonr(a, b)[0] for a in recall_outputs_flat] for b in recall_outputs_flat]
+                        pearson_r = torch.tensor(pearson_r)
+                        pearson_r_tensor = torch.cat((pearson_r_tensor, pearson_r[None, :, :]), 0)
+                        similarity = [[cos(a, b) for b in main_pairs_flat] for a in recall_outputs_flat]
                         similarity_idx = [t.index(max(t)) for t in similarity]
-                        predictions.extend([[labels_study[a] for a in similarity_idx[0:characters]]])
-
+                        predictions.extend([[labels_study[a] for a in similarity_idx]])
 
 
             # Recall
@@ -365,6 +372,11 @@ def main():
         # Save results
         predictions_initial = predictions[0:config['study_steps']:2]
         predictions_settled = predictions[1:config['study_steps']:2]
+        pearson_r_initial = pearson_r_tensor[1:config['study_steps']:2]
+        pearson_r_settled = pearson_r_tensor[2:config['study_steps']+1:2]
+        pearson_r_initial = torch.mean(pearson_r_initial, 0)
+        pearson_r_settled = torch.mean(pearson_r_settled, 0)
+
 
         with open(main_summary_dir + '/predictions_initial' + str(seed) + '.csv', 'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
@@ -373,6 +385,14 @@ def main():
         with open(main_summary_dir + '/predictions_settled'+str(seed)+'.csv', 'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
             writer_file.writerows(predictions_settled)
+
+        with open(main_summary_dir + '/pearsonr_initial' + str(seed) + '.csv', 'w', encoding='UTF8') as f:
+            writer_file = csv.writer(f)
+            writer_file.writerows(pearson_r_initial.numpy())
+
+        with open(main_summary_dir + '/pearsonr_settled'+str(seed)+'.csv', 'w', encoding='UTF8') as f:
+            writer_file = csv.writer(f)
+            writer_file.writerows(pearson_r_settled.numpy())
 
         oneshot_metrics.report_averages()
 

@@ -17,6 +17,7 @@ be CD. """
     self.length = seq_length
     self.type = type
     self.core_sequence = self._create_core_sequence()
+    self.core_SL_sequence = self._create_SL_core_sequence()
     self.sequence = self._create_sequence()
 
 
@@ -27,6 +28,16 @@ be CD. """
 
     seq = [(a, a + 1) for a in range(0, self.characters, 2)]
     return seq
+
+  def _create_SL_core_sequence(self):
+    if self.characters % 2 != 0:
+      self.characters += 1
+      print("Number of characters was increased to next even number to create pairs.")
+
+    seq = [(a, a + 1) for a in range(0, self.characters, 2)]
+    seq_sec = [[(b, i) for i in range(0, self.characters, 2) if i != (b-1)] for (a, b) in seq]
+    seq_sec = sum(seq_sec, [])
+    return seq + seq_sec
 
   def _create_sequence(self):
     first = range(0, self.characters, 2)
