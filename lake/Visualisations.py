@@ -3,14 +3,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
 import csv
+
 experiment = 'pairs_structure'
 type = 'statistical'
 date = '20210824-181923'
-
-#all_filenames = [i for i in glob.glob('*.{}'.format('csv'))]
-
 path = os.path.join('runs', experiment, type, 'predictions', date)
-
 
 # Function to load results in Runs
 def load_predictions_pearson(file_name, path):
