@@ -54,7 +54,7 @@ class AHA(MemoryInterface):
   local_key = 'aha'
 
   def is_hebbian_perforant(self):
-    return self.config('hebbian_perforant', False)
+    return self.config.get('hebbian_perforant', False)
 
   def reset(self):
     """Reset modules and optimizers."""
@@ -87,7 +87,7 @@ class AHA(MemoryInterface):
     if self.config.get('msp_type', None) == 'ca1':
       self.msp = MonosynapticPathway(ca3_shape=ca3_output_shape, ec_shape=self.input_shape, config=self.config['msp'])
     else:
-      self.pm = PatternMapper(ca3_output_shape, self.target_shape, self.config['pm_ec'])
+      self.pm = PatternMapper(ca3_output_shape, self.target_shape, self.config['pm'])
       self.pm_ec = PatternMapper(ca3_output_shape, self.input_shape, self.config['pm_ec'])
 
     # Build the Label Learner module
