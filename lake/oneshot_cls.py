@@ -31,6 +31,7 @@ SAVE_EVERY = 1
 MAX_VAL_STEPS = 100
 MAX_PRETRAIN_STEPS = -1
 VAL_SPLIT = 0.175
+SAVE_RUN_MODEL = True
 
 
 def main():
@@ -352,6 +353,12 @@ def main():
         summary_images.append(summary_image)
 
       utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
+
+    # Optional: Save the model checkpoint for this run
+    if SAVE_RUN_MODEL:
+      run_model_path = os.path.join(summary_dir, 'run_model_' + str(idx) + '.pt')
+      print('Saving model to:', run_model_path)
+      torch.save(model.state_dict(), run_model_path)
 
   oneshot_metrics.report_averages()
 

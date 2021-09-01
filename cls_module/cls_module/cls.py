@@ -148,16 +148,21 @@ class CLS(nn.Module):
             child_module.train(False)
 
   def load_state_dict(self, state_dict, strict=False):
-    modified_state_dict = {}
+    # TODO(@abdel): Why did we do this? This means that we can never re-load
+    # any other sub modules, other than something that starts with LTM.
 
-    for state_key in state_dict:
-      if state_key.startswith(self.ltm_key) and state_key in state_dict:
-        modified_state_dict[state_key] = state_dict[state_key]
-        continue
+    # modified_state_dict = {}
 
-      modified_state_dict[state_key] = self.initial_state[state_key]
+    # for state_key in state_dict:
+    #   if state_key.startswith(self.ltm_key) and state_key in state_dict:
+    #     modified_state_dict[state_key] = state_dict[state_key]
+    #     continue
 
-    super().load_state_dict(modified_state_dict, strict)
+    #   modified_state_dict[state_key] = self.initial_state[state_key]
+
+    # super().load_state_dict(modified_state_dict, strict)
+
+    super().load_state_dict(state_dict, strict)
 
     # Load pre-trained VC weights from TensorFlow implementation
     load_tf_vc_weights = False
