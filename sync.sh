@@ -4,7 +4,7 @@
 # sync code
 ################################################################################
 
-export MACHINE=${1:-incbox}
+export MACHINE=${1:-incbox-tb}
 DEST_DIR='~/agief-remote-run/pt-aha'
 
 # sync this folder
