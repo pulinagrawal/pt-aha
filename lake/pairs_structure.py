@@ -432,7 +432,6 @@ def convert_sequence_to_images(alphabet, sequence, main_labels, delete_first=Fal
     if delete_first:
         del pairs_images[0:num_delete]
     pairs_images = torch.stack(pairs_images, 0)
-    #labels = [(alphabet[int(a[0].item())][1], alphabet[int(a[1].item())][1]) for a in sequence]
     labels = [(alphabet[int(a[0])][1], alphabet[int(a[1])][1]) for a in sequence]
     labels = [main_labels.index(value) for value in labels]
     if delete_first:
