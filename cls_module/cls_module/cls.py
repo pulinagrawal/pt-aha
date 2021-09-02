@@ -183,7 +183,7 @@ class CLS(nn.Module):
     return self.forward(inputs, labels, mode='study')
 
   def memorise_test(self, inputs, labels):
-    return self.forward(inputs, labels, mode='study_validate')
+    return self.forward(inputs, labels, mode='study-test')
 
   def recall(self, inputs, labels):
     return self.forward(inputs, labels, mode='recall')
@@ -255,6 +255,16 @@ class CLS(nn.Module):
       # iterate STM
       losses[self.stm_key], outputs[self.stm_key] = self.stm(inputs=next_input, targets=inputs, labels=labels)
 
+      # Decode output from STM via the EC <=> LTM
+      output_decoding = outputs[self.stm_key]['memory']['decoding_ec']
+
+      if self.ec_key in self._modules:
+          output_decoding = self.ec.forward_decode(output_decoding)
+      output_decoding = self.ltm.forward_decode(output_decoding)
+
+      outputs[self.stm_key]['memory']['decoding'] = output_decoding.detach()
+      self.stm.features['recon'] = output_decoding.detach().cpu()
+
       preds = outputs[self.stm_key]['classifier']['predictions']
 
       if preds is not None:
@@ -317,10 +327,11 @@ class CLS(nn.Module):
         for metric_key, metric_value in outputs[module_name][submodule_name].items():
           summary_image = None
 
-          if metric_key == 'decoding':
+          if metric_key.startswith('decoding'):
             summary_image = torchvision.utils.make_grid(metric_value, normalize=True, scale_each=True)
 
           elif metric_key == 'encoding':
+            print(metric_key, metric_value.shape)
             square_image_shape, _ = square_image_shape_from_1d(np.prod(metric_value.shape[1:]))
             summary_image = torch.reshape(metric_value, [-1, 1, square_image_shape[1], square_image_shape[2]])
             summary_image = summary_image[0]
