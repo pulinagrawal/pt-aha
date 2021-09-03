@@ -121,4 +121,4 @@ class LinePlotter:
             line_plot = sns.lineplot(data=d, x="epoch", y="value", hue="category", err_style="bars", style='category',
                                      palette=['black', 'green', 'dimgrey', 'yellow', 'silver'])
             figure = line_plot.get_figure()
-            figure.savefig(os.path.join(path, self.component + '.png'), dpi=300)
+            figure.savefig(os.path.join(self.path, self.component + '.png'), dpi=300)

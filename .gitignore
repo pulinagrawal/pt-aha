@@ -146,3 +146,4 @@ cluster_experiment_scripts/
 *.pt
 *.npz
 *.png
+/lake/cifar_base.py
