@@ -333,7 +333,7 @@ class CLS(nn.Module):
         for metric_key, metric_value in outputs[module_name][submodule_name].items():
           summary_image = None
 
-          if metric_key.startswith('decoding'):
+          if metric_key == 'decoding':
             summary_image = torchvision.utils.make_grid(metric_value, normalize=True, scale_each=True)
 
           elif metric_key == 'encoding' or metric_key == 'decoding_ec':
