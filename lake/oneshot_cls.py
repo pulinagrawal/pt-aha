@@ -31,6 +31,7 @@ SAVE_EVERY = 1
 MAX_VAL_STEPS = 100
 MAX_PRETRAIN_STEPS = -1
 VAL_SPLIT = 0.175
+SAVE_RUN_MODEL = True
 
 
 def main():
@@ -251,7 +252,7 @@ def main():
   # Initialise metrics
   oneshot_metrics = OneshotMetrics()
 
-  # Load the pretrained model
+  # Initialise CLS
   model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
   for idx, ((study_data, study_target), (recall_data, recall_target)) in oneshot_dataset:
@@ -264,7 +265,12 @@ def main():
     recall_target = torch.from_numpy(np.array(recall_target)).to(device)
 
     # Reset to saved model
-    model.load_state_dict(torch.load(pretrained_model_path))
+    model_dict = model.state_dict()
+    pretrained_dict = torch.load(pretrained_model_path)
+    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+    model_dict.update(pretrained_dict)
+    model.load_state_dict(pretrained_dict)
+
     model.reset()
 
     # Study
@@ -273,12 +279,12 @@ def main():
       study_train_losses, _ = model(study_data, study_target, mode='study')
       study_train_loss = study_train_losses['stm']['memory']['loss']
 
-      if 'pr' in study_train_loss:
-        print('Losses step {}, ite {}: \t PR:{:.6f}\
-        PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
-                                                        study_train_loss['pr'].item(),
-                                                        study_train_loss['pr_mismatch'].item(),
-                                                        study_train_loss['pm_ec'].item()))
+      # if all (k in study_train_loss for k in ('pr', 'pm_ec')):
+      #   print('Losses step {}, ite {}: \t PR:{:.6f}\
+      #         PR mismatch: {:.6f} \t PM-EC: {:.6f}'.format(idx, step,
+      #                                                         study_train_loss['pr'].item(),
+      #                                                         study_train_loss['pr_mismatch'].item(),
+      #                                                         study_train_loss['pm_ec'].item()))
 
       model(recall_data, recall_target, mode='study_validate')
 
@@ -315,24 +321,16 @@ def main():
                                 secondary_labels=model.features['recall']['labels'],
                                 comparison_type='match_mse')
 
-        # oneshot_metrics.compare(prefix='pr_rf_',
-        #                         primary_features=model.features['recall']['stm_pr'],
-        #                         primary_labels=model.features['recall']['labels'],
-        #                         secondary_features=model.features['study']['stm_pr'],
-        #                         secondary_labels=model.features['study']['labels'],
-        #                         comparison_type='match_mse')
-
-
       oneshot_metrics.report()
 
       summary_names = [
         'study_inputs',
         'study_stm_pr',
-        'study_stm_pc',
+        'study_stm_ca3',
 
         'recall_inputs',
         'recall_stm_pr',
-        'recall_stm_pc',
+        'recall_stm_ca3',
         'recall_stm_recon'
       ]
 
@@ -355,6 +353,12 @@ def main():
         summary_images.append(summary_image)
 
       utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
+
+    # Optional: Save the model checkpoint for this run
+    if SAVE_RUN_MODEL:
+      run_model_path = os.path.join(summary_dir, 'run_model_' + str(idx) + '.pt')
+      print('Saving model to:', run_model_path)
+      torch.save(model.state_dict(), run_model_path)
 
   oneshot_metrics.report_averages()
 

@@ -6,7 +6,7 @@
 
   "pretrain_epochs": 10,
   "pretrain_batch_size": 128,
-  "pretrained_model_path": "/home/incubator/agief-remote-run/pt-aha/lake/runs/pretrain/pretrained_model_9.pt",
+  "pretrained_model_path": "./pretrained_model_15.pt",
 
   "study_steps": 120,
   "study_batch_size": 20,
@@ -17,10 +17,10 @@
   "stm_type": "aha",
 
   "metrics": {
-    "prefixes": ["pc", "ec_out_", "ec_out_rf_"],
-    "primary_feature_names": ["study.stm_pc", "study.stm_recon_ec", "recall.stm_recon_ec"],
+    "prefixes": ["ca3", "ec_out_", "ec_out_rf_"],
+    "primary_feature_names": ["study.stm_ca3", "study.stm_recon_ec", "recall.stm_recon_ec"],
     "primary_label_names": ["study.labels","study.labels", "recall.labels"],
-    "secondary_feature_names": ["recall.stm_pc", "recall.stm_recon_ec", "study.stm_recon_ec"],
+    "secondary_feature_names": ["recall.stm_ca3", "recall.stm_recon_ec", "study.stm_recon_ec"],
     "secondary_label_names": ["recall.labels", "recall.labels", "study.labels"],
     "comparison_types": ["match_mse", "match_mse", "match_mse"]
   },
@@ -62,9 +62,10 @@
     }
   },
   "stm": {
+    "msp_type": "pm",
     "hebbian_perforant": true,
 
-    "ps": {
+    "dg": {
         "inhibition_decay": 0.95,
         "knockout_rate": 0.25,
         "init_scale": 10.0,
@@ -72,38 +73,11 @@
         "sparsity": 10,
         "use_stub": false
     },
-    "pc": {
-        "shift_range": false,
-        "learning_rate": 0.01
+    "ca3": {
+      "shift_range": false
     },
-    "pr": {
-        "learning_rate": 0.01,
-        "weight_decay": 0.000025,
-
-        "num_units": 800,
-        "input_dropout": 0.25,
-        "hidden_dropout": 0.0,
-
-        "encoder_nonlinearity": "leaky_relu",
-        "decoder_nonlinearity": "none",
-        "use_bias": true,
-        "norm_inputs": false,
-
-        "noise_type": "s",
-        "noise_mode": "add",
-        "train_with_noise": 0.05,
-        "train_with_noise_pp": 0.005,
-        "test_with_noise": 0.0,
-        "test_with_noise_pp": 0.0,
-
-        "sparsity": 10,
-        "sparsity_boost": 1.0,
-        "sparsen": false,
-        "softmax": false,
-        "shift_bits": false,
-        "shift_range": false,
-        "sum_norm": 10.0,
-        "gain": 1.0
+    "perforant_hebb": {
+        "learning_rate": 0.01
     },
     "pm_ec": {
         "learning_rate": 0.01,

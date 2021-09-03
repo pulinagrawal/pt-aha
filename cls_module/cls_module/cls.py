@@ -148,16 +148,21 @@ class CLS(nn.Module):
             child_module.train(False)
 
   def load_state_dict(self, state_dict, strict=False):
-    modified_state_dict = {}
+    # TODO(@abdel): Why did we do this? This means that we can never re-load
+    # any other sub modules, other than something that starts with LTM.
 
-    for state_key in state_dict:
-      if state_key.startswith(self.ltm_key) and state_key in state_dict:
-        modified_state_dict[state_key] = state_dict[state_key]
-        continue
+    # modified_state_dict = {}
 
-      modified_state_dict[state_key] = self.initial_state[state_key]
+    # for state_key in state_dict:
+    #   if state_key.startswith(self.ltm_key) and state_key in state_dict:
+    #     modified_state_dict[state_key] = state_dict[state_key]
+    #     continue
 
-    super().load_state_dict(modified_state_dict, strict)
+    #   modified_state_dict[state_key] = self.initial_state[state_key]
+
+    # super().load_state_dict(modified_state_dict, strict)
+
+    super().load_state_dict(state_dict, strict)
 
     # Load pre-trained VC weights from TensorFlow implementation
     load_tf_vc_weights = False
@@ -248,7 +253,6 @@ class CLS(nn.Module):
 
       # iterate EC
       if self.ec_key in self._modules:
-        ec = self._modules[self.ec_key]
         outputs[self.ec_key] = self.ec(inputs=next_input)
         next_input = outputs[self.ec_key].detach()  # Ensures no gradients pass through modules
 
@@ -256,14 +260,16 @@ class CLS(nn.Module):
       losses[self.stm_key], outputs[self.stm_key] = self.stm(inputs=next_input, targets=inputs, labels=labels)
 
       # Decode output from STM via the EC <=> LTM
-      output_decoding = outputs[self.stm_key]['memory']['decoding_ec']
+      if outputs[self.stm_key]['memory']['decoding'] is None:
+        output_decoding = outputs[self.stm_key]['memory']['decoding_ec']
 
-      if self.ec_key in self._modules:
+        if self.ec_key in self._modules:
           output_decoding = self.ec.forward_decode(output_decoding)
-      output_decoding = self.ltm.forward_decode(output_decoding)
 
-      outputs[self.stm_key]['memory']['decoding'] = output_decoding.detach()
-      self.stm.features['recon'] = output_decoding.detach().cpu()
+        output_decoding = self.ltm.forward_decode(output_decoding)
+
+        outputs[self.stm_key]['memory']['decoding'] = output_decoding.detach()
+        self.stm.features['recon'] = output_decoding.detach().cpu()
 
       preds = outputs[self.stm_key]['classifier']['predictions']
 
@@ -330,8 +336,7 @@ class CLS(nn.Module):
           if metric_key.startswith('decoding'):
             summary_image = torchvision.utils.make_grid(metric_value, normalize=True, scale_each=True)
 
-          elif metric_key == 'encoding':
-            print(metric_key, metric_value.shape)
+          elif metric_key == 'encoding' or metric_key == 'decoding_ec':
             square_image_shape, _ = square_image_shape_from_1d(np.prod(metric_value.shape[1:]))
             summary_image = torch.reshape(metric_value, [-1, 1, square_image_shape[1], square_image_shape[2]])
             summary_image = summary_image[0]
