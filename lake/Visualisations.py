@@ -45,7 +45,10 @@ class HeatmapPlotter:
             letters = [list(string.ascii_uppercase)[a] for a in range(list(data.size())[1])]
             labels = [a + "_" for a in letters]
         plt.figure()
-        r_heatmap = sns.heatmap(data_mean, xticklabels=labels, yticklabels=labels, cmap="coolwarm", vmin=-0.1, vmax=1)
+        ax = plt.axes()
+        r_heatmap = sns.heatmap(data_mean, xticklabels=labels, yticklabels=labels, cmap="coolwarm",
+                                vmin=-0.1, vmax=1, ax=ax)
+        ax.set_title(self.component)
         figure = r_heatmap.get_figure()
         figure.savefig(os.path.join(self.path, self.component + '.png'), dpi=300)
 

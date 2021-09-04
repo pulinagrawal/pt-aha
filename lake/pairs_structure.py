@@ -77,9 +77,6 @@ def main():
             writer = SummaryWriter(log_dir=summary_dir)
             model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
-            # Ensure that pretrained model path doesn't exist so that training occurs
-            #pretrained_model_path = None
-
             if train_from == 'scratch':
                 # Clear the directory
                 for file in os.listdir(previous_run_path):
@@ -279,13 +276,13 @@ def main():
                         _, recall_outputs = model(recall_data, recall_target, mode='recall')
                         cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
                         for component in components:
-                            if component == 'ps':
+                            if component == 'dg':
                                 recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component],
                                                                 start_dim=1)
                             if component == 'pr':
                                 recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['pr_out'],
                                                                     start_dim=1)
-                            if component == 'pc':
+                            if component == 'ca3':
                                 recall_outputs_flat = torch.flatten(
                                     recall_outputs["stm"]["memory"][component],
                                     start_dim=1)
@@ -351,11 +348,11 @@ def main():
                 summary_names = [
                     'study_inputs',
                     'study_stm_pr',
-                    'study_stm_pc',
+                    'study_stm_ca3',
 
                     'recall_inputs',
                     'recall_stm_pr',
-                    'recall_stm_pc',
+                    'recall_stm_ca3',
                     'recall_stm_recon'
                 ]
 
@@ -398,23 +395,23 @@ def main():
             tag = ''
 
         for a in pearson_r_initial.keys():
-            with open(main_summary_dir + '/pearsonr_initial_' + a + str(seed) + tag + '.csv', 'w', encoding='UTF8') as f:
+            with open(main_summary_dir + '/pearson_initial_' + a + str(seed) + tag + '.csv', 'w', encoding='UTF8') as f:
                 writer_file = csv.writer(f)
                 writer_file.writerows(pearson_r_initial[a].numpy())
 
         for a in pearson_r_settled.keys():
-            with open(main_summary_dir + '/pearsonr_settled_' + a + str(seed) + tag + '.csv', 'w', encoding='UTF8') as f:
+            with open(main_summary_dir + '/pearson_settled_' + a + str(seed) + tag + '.csv', 'w', encoding='UTF8') as f:
                 writer_file = csv.writer(f)
                 writer_file.writerows(pearson_r_settled[a].numpy())
 
         oneshot_metrics.report_averages()
         writer.flush()
         writer.close()
-    for a in pearson_r_initial.keys():
-        heatmap_initial = HeatmapPlotter(main_summary_dir, "pearsonr_initial_" + a)
-        heatmap_settled = HeatmapPlotter(main_summary_dir, "pearsonr_settled_" + a)
-        heatmap_initial.create_heatmap()
-        heatmap_settled.create_heatmap()
+     for a in pearson_r_initial.keys():
+         heatmap_initial = HeatmapPlotter(main_summary_dir, "pearsonr_initial_" + a)
+         heatmap_settled = HeatmapPlotter(main_summary_dir, "pearsonr_settled_" + a)
+         heatmap_initial.create_heatmap()
+         heatmap_settled.create_heatmap()
 
 
 def add_empty_character(images, mirror=False):
