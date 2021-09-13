@@ -407,11 +407,12 @@ def main():
         oneshot_metrics.report_averages()
         writer.flush()
         writer.close()
-     for a in pearson_r_initial.keys():
-         heatmap_initial = HeatmapPlotter(main_summary_dir, "pearsonr_initial_" + a)
-         heatmap_settled = HeatmapPlotter(main_summary_dir, "pearsonr_settled_" + a)
-         heatmap_initial.create_heatmap()
-         heatmap_settled.create_heatmap()
+
+    for a in pearson_r_initial.keys():
+        heatmap_initial = HeatmapPlotter(main_summary_dir, "pearsonr_initial_" + a)
+        heatmap_settled = HeatmapPlotter(main_summary_dir, "pearsonr_settled_" + a)
+        heatmap_initial.create_heatmap()
+        heatmap_settled.create_heatmap()
 
 
 def add_empty_character(images, mirror=False):
