@@ -7,12 +7,14 @@ import utils
 import torch
 import torch.nn
 import numpy as np
+from scipy import stats
 import glob
 from torch.utils.tensorboard import SummaryWriter
 from cls_module.cls import CLS
 from datasets.sequence_generator import SequenceGenerator
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
+from Visualisations import HeatmapPlotter
 from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
 
@@ -45,12 +47,13 @@ def main():
     main_summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, main_folder=True)
     experiment = config.get('experiment_name')
     learning_type = config.get('learning_type')
+    components = config.get('test_stm_components')
 
     for _ in range(seeds):
 
         seed = np.random.randint(1, 10000)
         utils.set_seed(seed)
-        #np.random.seed(seed) if it is inside utils, do we need it here?
+        # np.random.seed(seed) if it is inside utils, do we need it here?
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -73,9 +76,6 @@ def main():
             summary_dir = previous_run_path
             writer = SummaryWriter(log_dir=summary_dir)
             model = CLS(image_shape, config, device=device, writer=writer).to(device)
-
-            # Ensure that pretrained model path doesn't exist so that training occurs
-            #pretrained_model_path = None
 
             if train_from == 'scratch':
                 # Clear the directory
@@ -137,9 +137,7 @@ def main():
                         print("Pretrain steps, {}, has exceeded max of {}.".format(batch_idx, MAX_PRETRAIN_STEPS))
                         break
 
-                    # An empty image is add to each character (an empty pair character)
-                    data = [torch.cat((a, torch.zeros(1, 52, 52)), 2) for a in data]
-                    data = torch.stack(data)
+                    data = add_empty_character(data) # An empty image is add to each character (an empty pair character)
                     labels = list(set(target))
                     target = torch.tensor([labels.index(value) for value in target])
                     data = data.to(device)
@@ -163,9 +161,7 @@ def main():
                                     print("\tval batch steps, {}, has exceeded max of {}.".format(batch_idx_val,
                                                                                                   MAX_VAL_STEPS))
                                     break
-
-                                val_data = [torch.cat((a, torch.zeros(1, 52, 52)), 2) for a in val_data]
-                                val_data = torch.stack(val_data)
+                                val_data = add_empty_character(val_data)
 
                                 val_data = val_data.to(device)
                                 target = target.to(device)
@@ -207,59 +203,51 @@ def main():
         variation = config.get('variation')
         idx_study = config.get('character_idx_study')
         idx_recall = config.get('character_idx_recall')
+        single_recall = config.get('test_single_characters')
+        mirror = config.get('test_mirror_characters')
 
-        alphabet = OmniglotAlphabet('./data', alphabet_name, True, False, idx_study, download=True, transform=image_tfms, target_transform=None)
-        alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, variation, idx_recall, download=True, transform=image_tfms,
-                                    target_transform=None)
+        alphabet = OmniglotAlphabet('./data', alphabet_name, True, False, idx_study, download=True,
+                                    transform=image_tfms, target_transform=None)
+        alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, variation, idx_recall, download=True,
+                                           transform=image_tfms, target_transform=None)
 
+        labels_study = sequence_study.core_SL_sequence
+        main_pairs, _ = convert_sequence_to_images(alphabet, labels_study, labels_study)
+        main_pairs_flat = torch.flatten(main_pairs, start_dim=1)
+        single_characters_original = [alphabet_recall[a][0] for a in range(0, characters)]
+        single_characters = add_empty_character(single_characters_original)
+        if mirror:
+            single_characters_mirror = add_empty_character(single_characters_original, mirror)
+            single_characters = torch.cat((single_characters, single_characters_mirror), 0)
+            characters = characters*2
 
         # Initialise metrics
         oneshot_metrics = OneshotMetrics()
 
         # Load the pretrained model
         model = CLS(image_shape, config, device=device, writer=writer).to(device)
-        single_recall = config.get('test_single_characters')
 
         predictions = []
-
+        pearson_r_tensor = torch.zeros((characters, characters))
+        pearson_r_tensor = pearson_r_tensor[None, :, :]
+        pearson_r_tensor = {k: pearson_r_tensor for k in components}
         for idx, (study_set, recall_set) in pair_sequence_dataset:
-            study_data = [torch.cat((alphabet[int(a[0].item())][0], alphabet[int(a[1].item())][0]), 2) for a in study_set]
-            study_target_pairs = [(alphabet[int(a[0].item())][1], alphabet[int(a[1].item())][1]) for a in study_set]
-
-            study_data = torch.stack(study_data)
-            main_pairs = torch.unique(study_data, dim=0, return_counts=True)
-            main_pairs = torch.flatten(main_pairs[0], start_dim=1)
-            labels_study = list(set(study_target_pairs))
-            study_target = [labels_study.index(value) for value in study_target_pairs]
-
-
+            study_data, study_target = convert_sequence_to_images(alphabet, study_set, labels_study)
             study_target = torch.tensor(study_target, dtype=torch.long, device=device)
 
             study_data = study_data.to(device)
             study_target = study_target.to(device)
 
-            single_characters = [torch.cat((alphabet_recall[a][0], torch.zeros(1, 52, 52)), 2) for a in range(0, characters)]
-            single_characters = torch.stack(single_characters)
-            recall_target_pairs = [(alphabet_recall[int(a[0].item())][1], alphabet_recall[int(a[1].item())][1]) for a in
-                                   recall_set]
-            labels_recall = list(set(recall_target_pairs))
-            recall_target = [labels_recall.index(value) for value in recall_target_pairs]
-
             if single_recall:
                 recall_data = single_characters.repeat(-(-batch_size//characters), 1, 1, 1)
                 recall_data = recall_data[0:batch_size]
-                recall_target = list(range(max(recall_target) + 1, max(recall_target) + 1 + characters))
+                recall_target = list(range(single_characters.size()[0]))
                 recall_target = recall_target * -(-batch_size//characters)
                 del recall_target[batch_size:len(recall_target)]
             else:
-                recall_data = [torch.cat((alphabet_recall[int(a[0].item())][0], alphabet_recall[int(a[1].item())][0]), 2)
-                           for a in recall_set]
-                del recall_data[0:characters]
-
-                recall_data = torch.stack(recall_data)
+                recall_data, recall_target = convert_sequence_to_images(alphabet_recall, recall_set, labels_study,
+                                                                        delete_first=True, num_delete=characters)
                 recall_data = torch.cat((single_characters, recall_data), 0)
-
-                del recall_target[0:characters]
                 recall_target = list(range(max(recall_target) + 1, max(recall_target) + 1 + characters)) + recall_target
 
             recall_data = recall_data.to(device)
@@ -283,16 +271,38 @@ def main():
                                                                  study_train_loss['pm_ec'].item()))
                 model(recall_data, recall_target, mode='study_validate')
 
-                if step == config['initial_response_step'] or step == (config['study_steps']-1):
+                if step == (config['initial_response_step']-1) or step == (config['study_steps']-1):
                     with torch.no_grad():
                         _, recall_outputs = model(recall_data, recall_target, mode='recall')
                         cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
-                        recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"]["decoding"], start_dim=1)
-                        similarity = [[cos(a, b) for b in main_pairs] for a in recall_outputs_flat]
-                        similarity_idx = [t.index(max(t)) for t in similarity]
-                        predictions.extend([[labels_study[a] for a in similarity_idx[0:characters]]])
+                        for component in components:
+                            if component == 'dg':
+                                recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component],
+                                                                start_dim=1)
+                            if component == 'pr':
+                                recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['pr_out'],
+                                                                    start_dim=1)
+                            if component == 'ca3':
+                                recall_outputs_flat = torch.flatten(
+                                    recall_outputs["stm"]["memory"][component],
+                                    start_dim=1)
+                            if component == 'pm_ec':
+                                recall_outputs_flat = torch.flatten(
+                                    recall_outputs["stm"]["memory"][component]['decoding'],
+                                    start_dim=1)
+                            if component == 'final':
+                                recall_outputs_flat = torch.flatten(
+                                    recall_outputs["stm"]["memory"]['decoding'],
+                                    start_dim=1)
+                                similarity = [[cos(a, b) for b in main_pairs_flat] for a in recall_outputs_flat]
+                                similarity_idx = [t.index(max(t)) for t in similarity]
+                                predictions.extend([[labels_study[a] for a in similarity_idx]])
 
-
+                            recall_outputs_flat = recall_outputs_flat[0:characters]
+                            pearson_r = [[stats.pearsonr(a, b)[0] for a in recall_outputs_flat] for b in
+                                         recall_outputs_flat]
+                            pearson_r = torch.tensor(pearson_r)
+                            pearson_r_tensor[component] = torch.cat((pearson_r_tensor[component], pearson_r[None, :, :]), 0)
 
             # Recall
             # --------------------------------------------------------------------------
@@ -338,11 +348,11 @@ def main():
                 summary_names = [
                     'study_inputs',
                     'study_stm_pr',
-                    'study_stm_pc',
+                    'study_stm_ca3',
 
                     'recall_inputs',
                     'recall_stm_pr',
-                    'recall_stm_pc',
+                    'recall_stm_ca3',
                     'recall_stm_recon'
                 ]
 
@@ -365,6 +375,11 @@ def main():
         # Save results
         predictions_initial = predictions[0:config['study_steps']:2]
         predictions_settled = predictions[1:config['study_steps']:2]
+        pearson_r_initial = {a: pearson_r_tensor[a][1:config['study_steps']:2] for a in pearson_r_tensor}
+        pearson_r_settled = {a: pearson_r_tensor[a][2:config['study_steps']+1:2] for a in pearson_r_tensor}
+        pearson_r_initial = {a: torch.mean(pearson_r_initial[a], 0) for a in pearson_r_initial}
+        pearson_r_settled = {a: torch.mean(pearson_r_settled[a], 0) for a in pearson_r_settled}
+
 
         with open(main_summary_dir + '/predictions_initial' + str(seed) + '.csv', 'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
@@ -374,10 +389,54 @@ def main():
             writer_file = csv.writer(f)
             writer_file.writerows(predictions_settled)
 
-        oneshot_metrics.report_averages()
+        if mirror:
+            tag = 'mirror'
+        else:
+            tag = ''
 
+        for a in pearson_r_initial.keys():
+            with open(main_summary_dir + '/pearson_initial_' + a + str(seed) + tag + '.csv', 'w', encoding='UTF8') as f:
+                writer_file = csv.writer(f)
+                writer_file.writerows(pearson_r_initial[a].numpy())
+
+        for a in pearson_r_settled.keys():
+            with open(main_summary_dir + '/pearson_settled_' + a + str(seed) + tag + '.csv', 'w', encoding='UTF8') as f:
+                writer_file = csv.writer(f)
+                writer_file.writerows(pearson_r_settled[a].numpy())
+
+        oneshot_metrics.report_averages()
         writer.flush()
         writer.close()
 
+    for a in pearson_r_initial.keys():
+        heatmap_initial = HeatmapPlotter(main_summary_dir, "pearsonr_initial_" + a)
+        heatmap_settled = HeatmapPlotter(main_summary_dir, "pearsonr_settled_" + a)
+        heatmap_initial.create_heatmap()
+        heatmap_settled.create_heatmap()
+
+
+def add_empty_character(images, mirror=False):
+    if mirror:
+        data = [torch.cat((torch.zeros(1, 52, 52), a), 2) for a in images]
+        data = torch.stack(data)
+    else:
+        data = [torch.cat((a, torch.zeros(1, 52, 52)), 2) for a in images]
+        data = torch.stack(data)
+    return data
+
+
+def convert_sequence_to_images(alphabet, sequence, main_labels, delete_first=False, num_delete=0):
+    pairs_images = [torch.cat((alphabet[int(a[0])][0], alphabet[int(a[1])][0]), 2) for a in sequence]
+    if delete_first:
+        del pairs_images[0:num_delete]
+    pairs_images = torch.stack(pairs_images, 0)
+    labels = [(alphabet[int(a[0])][1], alphabet[int(a[1])][1]) for a in sequence]
+    labels = [main_labels.index(value) for value in labels]
+    if delete_first:
+        del labels[0:num_delete]
+    return pairs_images, labels
+
+
 if __name__ == '__main__':
     main()
+

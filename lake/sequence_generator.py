@@ -60,7 +60,3 @@ be CD. """
         raise NotImplementedError('Learning type must be statistical or episodic.')
 
     return seq
-
-
-
-
