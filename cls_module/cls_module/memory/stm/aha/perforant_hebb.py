@@ -25,6 +25,8 @@ class PerforantHebb(nn.Module):
     self.reset_params = self.config.get('reset_params', True)
     self.reset_optim = self.config.get('reset_optim', True)
 
+    self.use_dg_ca3 = self.config.get('use_dg_ca3', False)
+
     ec_size = np.prod(ec_shape[1:])
     dg_size = np.prod(dg_shape[1:])
     ca3_size = np.prod(ca3_shape[1:])
@@ -50,7 +52,11 @@ class PerforantHebb(nn.Module):
   def forward(self, ec_inputs, dg_inputs):
     with torch.no_grad():
       dg_ca3_in = dg_inputs
-      pre_dg_ca3_out = self.dg_ca3(dg_ca3_in)
+
+      if self.use_dg_ca3:
+        pre_dg_ca3_out = self.dg_ca3(dg_ca3_in)
+      else:
+        pre_dg_ca3_out = dg_inputs
 
       ec_ca3_in = torch.flatten(ec_inputs, 1)
       pre_ec_ca3_out = self.ec_ca3(ec_ca3_in)
@@ -60,9 +66,10 @@ class PerforantHebb(nn.Module):
 
       if self.training:
         # Update DG:CA3 with respect to dg_ca3_in (i.e. outputs['ps'])
-        d_dg_ca3 = self.learning_rule.compute_dw(dg_ca3_in, pre_pc_cue, self.dg_ca3.weight)
-        d_dg_ca3 = d_dg_ca3.view(*self.dg_ca3.weight.size())
-        self.dg_ca3_optimizer.local_step(d_dg_ca3)
+        if self.use_dg_ca3:
+          d_dg_ca3 = self.learning_rule.compute_dw(dg_ca3_in, pre_pc_cue, self.dg_ca3.weight)
+          d_dg_ca3 = d_dg_ca3.view(*self.dg_ca3.weight.size())
+          self.dg_ca3_optimizer.local_step(d_dg_ca3)
 
         # Update EC:CA3 with respect to ec_ca3_in (i.e. inputs)
         d_ec_ca3 = self.learning_rule.compute_dw(ec_ca3_in, pre_pc_cue, self.ec_ca3.weight)
@@ -70,7 +77,11 @@ class PerforantHebb(nn.Module):
         self.ec_ca3_optimizer.local_step(d_ec_ca3)
 
       # Compute the post synaptic activity for loss calculation
-      post_dg_ca3_out = self.dg_ca3(dg_ca3_in)
+      if self.use_dg_ca3:
+        post_dg_ca3_out = self.dg_ca3(dg_ca3_in)
+      else:
+        post_dg_ca3_out = dg_inputs
+
       post_ec_ca3_out = self.ec_ca3(ec_ca3_in)
       post_pc_cue = post_dg_ca3_out + post_ec_ca3_out
 
