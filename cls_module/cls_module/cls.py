@@ -3,6 +3,7 @@
 import os
 import collections
 import logging
+from typing import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -110,6 +111,35 @@ class CLS(nn.Module):
 
     self.add_module(self.stm_key, stm_)
 
+    # 4) _________ decoder ____________________________________
+    decoder_config = self.config['decoder']
+    decoder_layers = []
+    decoder_input_size = np.prod(list(next_input)[1:])
+    decoder_hidden_size = decoder_config['units'][0]
+    decoder_output_size = np.prod(list(self.input_shape)[1:])
+
+    for i in range(decoder_config['num_layers']):
+      decoder_layers.extend([
+        ('layer_' + str(i), nn.Linear(decoder_input_size, decoder_hidden_size)),
+        ('act_' + str(i), nn.LeakyReLU())
+      ])
+
+      if i < (decoder_config['num_layers'] - 1):
+        decoder_input_size = decoder_hidden_size
+        decoder_hidden_size = decoder_config['units'][i + 1]
+
+    decoder_layers.extend([
+      ('output_layer', nn.Linear(decoder_hidden_size, decoder_output_size)),
+      ('output_act', nn.LeakyReLU())
+    ])
+
+    print(decoder_layers)
+
+    self.decoder = nn.Sequential(OrderedDict(decoder_layers))
+    self.decoder_optimizer = torch.optim.Adam(self.decoder.parameters(),
+                                              lr=decoder_config['learning_rate'],
+                                              weight_decay=decoder_config['weight_decay'])
+
   def reset(self, names=None):
     """Reset relevant sub-modules."""
     if names is None:
@@ -146,6 +176,44 @@ class CLS(nn.Module):
         for child_name, child_module in parent_module.named_modules():
           if child_name == name[1]:
             child_module.train(False)
+
+  def forward_decoder(self, inputs, targets, training=None):
+    if training:
+      self.decoder_optimizer.zero_grad()
+
+    output_shape = targets.shape
+
+    inputs = torch.flatten(inputs, start_dim=1)
+    targets = torch.flatten(targets, start_dim=1)
+
+    if self.config['decoder'].get('norm_inputs'):
+      inputs = (inputs - inputs.min()) / (inputs.max() - inputs.min())
+
+    decoding = self.decoder(inputs)
+    loss = F.mse_loss(decoding, targets)
+
+    decoding_reshape = decoding.reshape(output_shape)
+
+    outputs = {
+      'ltm': {
+        'decoding': decoding_reshape.detach(),
+        'output': decoding_reshape.detach()  # Designated output for linked modules
+      }
+    }
+
+    if training:
+      loss.backward()
+      self.decoder_optimizer.step()
+
+    losses = {
+      'ltm': {
+        'loss': {
+          'decoder': loss,
+        }
+      }
+    }
+
+    return losses, outputs
 
   def load_state_dict(self, state_dict, strict=False):
     # TODO(@abdel): Why did we do this? This means that we can never re-load
@@ -259,14 +327,16 @@ class CLS(nn.Module):
       # iterate STM
       losses[self.stm_key], outputs[self.stm_key] = self.stm(inputs=next_input, targets=inputs, labels=labels)
 
+      # iterate decoder
+      losses['decoder'], outputs['decoder'] = self.forward_decoder(inputs=next_input, targets=inputs, training=self.training)
+
       # Decode output from STM via the EC <=> LTM
       if outputs[self.stm_key]['memory']['decoding'] is None:
         output_decoding = outputs[self.stm_key]['memory']['decoding_ec']
 
-        if self.ec_key in self._modules:
-          output_decoding = self.ec.forward_decode(output_decoding)
-
-        output_decoding = self.ltm.forward_decode(output_decoding)
+        with torch.no_grad():
+          _, decoder_outputs = self.forward_decoder(inputs=output_decoding, targets=inputs, training=False)
+          output_decoding = decoder_outputs['ltm']['decoding']
 
         outputs[self.stm_key]['memory']['decoding'] = output_decoding.detach()
         self.stm.features['recon'] = output_decoding.detach().cpu()
