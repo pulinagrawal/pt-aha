@@ -8,7 +8,6 @@
 
   "pretrain_epochs": 10,
   "pretrain_batch_size": 128,
-  "pretrained_model_path": "./pretrained_model_15.pt",
 
   "study_steps": 60,
   "study_batch_size": 20,
@@ -19,12 +18,12 @@
   "stm_type": "aha",
 
   "metrics": {
-    "prefixes": ["ca3", "pr_rf_", "ec_out_", "ec_out_rf_"],
-    "primary_feature_names": ["study.stm_ca3","recall.stm_pr", "study.stm_recon_ec", "recall.stm_recon_ec"],
-    "primary_label_names": ["study.labels", "recall.labels","study.labels", "recall.labels"],
-    "secondary_feature_names": ["recall.stm_ca3","study.stm_pr", "recall.stm_recon_ec", "study.stm_recon_ec"],
-    "secondary_label_names": ["recall.labels", "study.labels", "recall.labels", "study.labels"],
-    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
+    "prefixes": ["ltm_sf", "ca3", "pr_rf", "ec_out", "ec_out_rf"],
+    "primary_feature_names": ["study.ltm_vc", "study.stm_ca3","recall.stm_pr", "study.stm_recon_ec", "recall.stm_recon_ec"],
+    "primary_label_names": ["study.labels", "study.labels", "recall.labels","study.labels", "recall.labels"],
+    "secondary_feature_names": ["recall.ltm_vc", "recall.stm_ca3","study.stm_pr", "recall.stm_recon_ec", "study.stm_recon_ec"],
+    "secondary_label_names": ["recall.labels", "recall.labels", "study.labels", "recall.labels", "study.labels"],
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse", "match_mse"]
   },
 
   "ltm": {
@@ -50,7 +49,6 @@
 
     "output_pool_size": 4,
     "output_pool_stride": 4,
-    "output_norm_per_sample": true,
 
     "classifier": {
       "learning_rate": 0.001,
@@ -116,7 +114,7 @@
         "hidden_dropout": 0.0,
 
         "encoder_nonlinearity": "leaky_relu",
-        "decoder_nonlinearity": "leaky_relu",
+        "decoder_nonlinearity": "none",
         "use_bias": true,
         "norm_inputs": true
     },

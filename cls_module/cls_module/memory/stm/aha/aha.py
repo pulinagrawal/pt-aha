@@ -104,7 +104,18 @@ class AHA(MemoryInterface):
     outputs = {}
     features = {}
 
-    outputs['dg'] = self.dg(inputs)
+    normed_inputs = inputs
+    frobenius_norm = torch.sqrt(
+        torch.sum(torch.square(inputs),
+                  dim=[1, 2, 3],
+                  keepdim=True)
+    )
+
+    normed_inputs = normed_inputs / frobenius_norm
+
+    outputs['ec_in'] = inputs
+
+    outputs['dg'] = self.dg(normed_inputs)
     features['dg'] = outputs['dg'].detach().cpu()
 
     # Compute DG Overlap
@@ -113,13 +124,13 @@ class AHA(MemoryInterface):
 
     # Perforant Pathway: Hebbian Learning
     if self.is_hebbian_perforant():
-      ca3_cue, losses['dg_ca3'], losses['ec_ca3'], losses['ca3_cue'] = self.perforant(ec_inputs=inputs, dg_inputs=outputs['dg'])
+      ca3_cue, losses['dg_ca3'], losses['ec_ca3'], losses['ca3_cue'] = self.perforant(ec_inputs=normed_inputs, dg_inputs=outputs['dg'])
 
     # Perforant Pathway: Error-Driven Learning
     else:
       pr_targets = outputs['dg']
       # pr_targets = outputs['dg'] if self.training else self.pc_buffer_batch
-      losses['pr'], outputs['pr'] = self.perforant(inputs=inputs, targets=pr_targets)
+      losses['pr'], outputs['pr'] = self.perforant(inputs=normed_inputs, targets=pr_targets)
       features['pr'] = outputs['pr']['pr_out'].detach().cpu()
 
       # Compute PR Mismatch

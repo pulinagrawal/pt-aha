@@ -93,15 +93,6 @@ class VisualComponent(MemoryInterface):
           stride=self.config['output_pool_stride'],
           padding=self.config.get('output_pool_padding', 0), return_indices=True)
 
-    if self.config['output_norm_per_sample']:
-      frobenius_norm = torch.sqrt(
-          torch.sum(torch.square(encoding),
-                    dim=[1, 2, 3],
-                    keepdim=True)
-      )
-
-      encoding = encoding / frobenius_norm
-
     return encoding
 
   def unprepare_encoding(self, prepared_encoding):

@@ -1,6 +1,8 @@
 {
   "seed": 42,
 
+  "experiment_name": "one_shot",
+
   "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
 
@@ -10,16 +12,18 @@
   "study_steps": 60,
   "study_batch_size": 20,
 
+  "dataset":  "Omniglot",
+
   "ltm_type": "vgg",
   "stm_type": "aha",
 
   "metrics": {
-    "prefixes": ["ca3", "pr_rf_", "ec_out_", "ec_out_rf_"],
-    "primary_feature_names": ["study.stm_ca3","recall.stm_pr", "study.stm_recon_ec", "recall.stm_recon_ec"],
-    "primary_label_names": ["study.labels", "recall.labels","study.labels", "recall.labels"],
-    "secondary_feature_names": ["recall.stm_ca3","study.stm_pr", "recall.stm_recon_ec", "study.stm_recon_ec"],
-    "secondary_label_names": ["recall.labels", "study.labels", "recall.labels", "study.labels"],
-    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
+    "prefixes": ["ltm_sf", "ca3", "pr_rf", "ec_out", "ec_out_rf"],
+    "primary_feature_names": ["study.ltm_vgg", "study.stm_ca3","recall.stm_pr", "study.stm_recon_ec", "recall.stm_recon_ec"],
+    "primary_label_names": ["study.labels", "study.labels", "recall.labels","study.labels", "recall.labels"],
+    "secondary_feature_names": ["recall.ltm_vgg", "recall.stm_ca3","study.stm_pr", "recall.stm_recon_ec", "study.stm_recon_ec"],
+    "secondary_label_names": ["recall.labels", "recall.labels", "study.labels", "recall.labels", "study.labels"],
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse", "match_mse"]
   },
 
   "ltm": {
@@ -40,7 +44,7 @@
   "stm": {
     "msp_type": "pm",
     "hebbian_perforant": false,
-    
+
     "dg": {
         "inhibition_decay": 0.95,
         "knockout_rate": 0.25,
@@ -90,7 +94,7 @@
         "hidden_dropout": 0.0,
 
         "encoder_nonlinearity": "leaky_relu",
-        "decoder_nonlinearity": "leaky_relu",
+        "decoder_nonlinearity": "none",
         "use_bias": true,
         "norm_inputs": true
     },
