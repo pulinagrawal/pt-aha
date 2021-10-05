@@ -7,11 +7,12 @@ import utils
 import torch
 import torch.nn
 import numpy as np
-from scipy import stats
+import datetime
 import glob
+from scipy import stats
 from torch.utils.tensorboard import SummaryWriter
 from cls_module.cls import CLS
-from datasets.sequence_generator import SequenceGenerator
+from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
 from Visualisations import HeatmapPlotter
@@ -44,10 +45,20 @@ def main():
     seeds = config['seeds']
     experiment = config.get('experiment_name')
     learning_type = config.get('learning_type')
-    main_summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, main_folder=True)
-    experiment = config.get('experiment_name')
-    learning_type = config.get('learning_type')
     components = config.get('test_stm_components')
+    now = datetime.datetime.now()
+    experiment_time = now.strftime("%Y%m%d-%H%M%S")
+
+    if experiment not in ["pairs_structure", "community_structure"]:
+        experiment = "pairs_structure"
+        print("Experiment NOT specified. Must be pairs_structure or community_structure. "
+              "Set to pairs_structure by default.")
+
+    if experiment == "community_structure":
+        learning_type = experiment
+
+    main_summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time, main_folder=True)
+
 
     for _ in range(seeds):
 
@@ -112,7 +123,7 @@ def main():
                          return
 
         else:
-            summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, main_folder=False)
+            summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time, main_folder=False)
             writer = SummaryWriter(log_dir=summary_dir)
             model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
@@ -186,11 +197,17 @@ def main():
 
         characters = config.get('characters')
         length = config.get('sequence_length')
+        communities = config.get('communities')
         batch_size = config['study_batch_size']
 
-        # Create sequence of pairs
-        sequence_study = SequenceGenerator(characters, length, learning_type)
-        sequence_recall = SequenceGenerator(characters, length, learning_type)
+        # Create sequence
+        if experiment == "pairs_structure":
+            sequence_study = SequenceGenerator(characters, length, learning_type)
+            sequence_recall = SequenceGenerator(characters, length, learning_type)
+        elif experiment == "community_structure":
+            sequence_study = SequenceGeneratorGraph(characters, length, communities)
+            sequence_recall = SequenceGeneratorGraph(characters, length, communities)
+
 
         sequence_study_tensor = torch.FloatTensor(sequence_study.sequence)
         sequence_recall_tensor = torch.FloatTensor(sequence_recall.sequence)
@@ -211,7 +228,7 @@ def main():
         alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, variation, idx_recall, download=True,
                                            transform=image_tfms, target_transform=None)
 
-        labels_study = sequence_study.core_SL_sequence
+        labels_study = sequence_study.core_label_sequence
         main_pairs, _ = convert_sequence_to_images(alphabet, labels_study, labels_study)
         main_pairs_flat = torch.flatten(main_pairs, start_dim=1)
         single_characters_original = [alphabet_recall[a][0] for a in range(0, characters)]
@@ -409,8 +426,8 @@ def main():
         writer.close()
 
     for a in pearson_r_initial.keys():
-        heatmap_initial = HeatmapPlotter(main_summary_dir, "pearsonr_initial_" + a)
-        heatmap_settled = HeatmapPlotter(main_summary_dir, "pearsonr_settled_" + a)
+        heatmap_initial = HeatmapPlotter(main_summary_dir, "pearson_initial_" + a)
+        heatmap_settled = HeatmapPlotter(main_summary_dir, "pearson_settled_" + a)
         heatmap_initial.create_heatmap()
         heatmap_settled.create_heatmap()
 
