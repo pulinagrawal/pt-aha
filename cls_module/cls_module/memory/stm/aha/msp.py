@@ -53,8 +53,8 @@ class MonosynapticPathway(nn.Module):
     if self.ca3_ca1_reset_optim:
       self.ca3_ca1_optimizer.state = defaultdict(dict)
 
-  def forward_ca1(self, inputs, targets):
-    if self.training:
+  def forward_ca1(self, inputs, targets, training=True):
+    if training:
       self.ca1_optimizer.zero_grad()
 
     encoding, decoding = self.ca1(inputs)
@@ -68,7 +68,7 @@ class MonosynapticPathway(nn.Module):
         'output': encoding.detach()  # Designated output for linked modules
     }
 
-    if self.training:
+    if training:
       loss.backward()
       self.ca1_optimizer.step()
 
@@ -97,8 +97,11 @@ class MonosynapticPathway(nn.Module):
 
   def forward(self, ec_inputs, ca3_inputs):
     # During study, EC will drive the CA1
-    ca1_loss, ca1_outputs = self.forward_ca1(inputs=ec_inputs, targets=ec_inputs)
-    ca3_ca1_target = ca1_outputs['encoding']
+    ca1_loss, ca1_outputs = self.forward_ca1(inputs=ec_inputs, targets=ec_inputs, training=self.training)
+
+    with torch.no_grad():
+      _, post_ca1_outputs = self.forward_ca1(inputs=ec_inputs, targets=ec_inputs, training=False)
+      ca3_ca1_target = post_ca1_outputs['encoding']
 
     ca3_ca1_loss, ca3_ca1_outputs = self.forward_ca3_ca1(inputs=ca3_inputs, targets=ca3_ca1_target)
 
