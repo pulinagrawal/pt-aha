@@ -1,11 +1,13 @@
 {
-  "seed": 42,
-  "seeds": 100,
+  "seeds": 3,
 
   "experiment_name": "pairs_structure",
   "learning_type": "statistical",
-  "characters": 8,
+  "characters": 15,
   "sequence_length": 800,
+  "communities": 3,
+
+
   "alphabet": "Latin",
   "variation": false,
   "character_idx_study": 1,
@@ -17,9 +19,9 @@
   "image_resize_factor": 0.5,
   "image_shape": [1, 1, 52, 104],
 
-  "pretrain_epochs": 1,
+  "pretrain_epochs": 5,
   "pretrain_batch_size": 150,
-  "study_steps": 80,
+  "study_steps": 50,
   "initial_response_step": 20,
   "study_batch_size": 80,
 
@@ -68,7 +70,7 @@
       "hidden_dropout": [],
 
       "hidden_units": [],
-      "output_units": 64
+      "output_units": 90
     }
   },
   "stm": {
@@ -147,7 +149,7 @@
         "input_dropout": 0.0,
         "hidden_dropout": [],
         "hidden_units": [800],
-        "output_units": 64
+        "output_units": 90
       }
   }
 }

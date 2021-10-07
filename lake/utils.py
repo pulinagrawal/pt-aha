@@ -10,13 +10,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def get_summary_dir(experiment, main_folder=False):
+def get_summary_dir(experiment, time, main_folder=False):
   now = datetime.datetime.now()
   if main_folder:
-    summary_dir = os.path.join('.', 'runs', experiment, 'predictions', now.strftime("%Y%m%d-%H%M%S"))
+    summary_dir = os.path.join('.', 'runs', experiment, 'predictions', time)
     os.makedirs(summary_dir)
   else:
-    summary_dir = os.path.join('.', 'runs', experiment, now.strftime("%Y%m%d-%H%M%S"))
+    summary_dir = os.path.join('.', 'runs', experiment, time, now.strftime("%Y%m%d-%H%M%S"))
   return summary_dir
 
 

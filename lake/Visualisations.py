@@ -38,15 +38,15 @@ class HeatmapPlotter:
         data_mean = torch.mean(data, 0)
         if mirror:
             letters = [list(string.ascii_uppercase)[a] for a in range(list(data.size())[1] // 2)]
-            first_letters = [a + "_" for a in letters]
-            second_letters = ["_" + a for a in letters]
+            first_letters = [a + "*" for a in letters]
+            second_letters = ["*" + a for a in letters]
             labels = first_letters + second_letters
         else:
             letters = [list(string.ascii_uppercase)[a] for a in range(list(data.size())[1])]
-            labels = [a + "_" for a in letters]
+            labels = [a + "*" for a in letters]
         plt.figure()
         ax = plt.axes()
-        r_heatmap = sns.heatmap(data_mean, xticklabels=labels, yticklabels=labels, cmap="coolwarm",
+        r_heatmap = sns.heatmap(data_mean, xticklabels=labels, yticklabels=labels, cmap="RdYlBu_r",
                                 vmin=-0.1, vmax=1, ax=ax)
         ax.set_title(self.component)
         figure = r_heatmap.get_figure()
