@@ -126,6 +126,8 @@ class AHA(MemoryInterface):
     if self.is_hebbian_perforant():
       ca3_cue, losses['dg_ca3'], losses['ec_ca3'], losses['ca3_cue'] = self.perforant(ec_inputs=normed_inputs, dg_inputs=outputs['dg'])
 
+      features['ca3_cue'] = ca3_cue.detach().cpu()
+
     # Perforant Pathway: Error-Driven Learning
     else:
       pr_targets = outputs['dg']
