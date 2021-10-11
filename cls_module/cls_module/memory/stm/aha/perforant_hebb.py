@@ -89,4 +89,4 @@ class PerforantHebb(nn.Module):
       ec_ca3_loss = F.mse_loss(pre_ec_ca3_out, post_ec_ca3_out)
       pc_cue_loss = F.mse_loss(pre_pc_cue, post_pc_cue)
 
-    return pc_cue, dg_ca3_loss, ec_ca3_loss, pc_cue_loss
+      return pc_cue.detach(), dg_ca3_loss, ec_ca3_loss, pc_cue_loss
