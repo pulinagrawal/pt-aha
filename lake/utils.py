@@ -10,14 +10,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def get_summary_dir(experiment, time, main_folder=False):
+def get_summary_dir(experiment, time=None, main_folder=False):
   now = datetime.datetime.now()
-  if main_folder:
-    summary_dir = os.path.join('.', 'runs', experiment, 'predictions', time)
-    os.makedirs(summary_dir)
-  else:
-    summary_dir = os.path.join('.', 'runs', experiment, time, now.strftime("%Y%m%d-%H%M%S"))
-  return summary_dir
+  if time:
+    if main_folder:
+      summary_dir = os.path.join('.', 'runs', experiment, 'predictions', time)
+      os.makedirs(summary_dir)
+      return summary_dir
+    return os.path.join('.', 'runs', experiment, time, now.strftime("%Y%m%d-%H%M%S"))
+  return os.path.join('.', 'runs', experiment, now.strftime("%Y%m%d-%H%M%S"))
 
 
 def set_seed(seed):
