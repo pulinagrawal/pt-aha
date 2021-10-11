@@ -70,13 +70,14 @@ class OneshotMetrics:
       cos = torch.nn.CosineSimilarity(dim=1, eps=1e-08)
       self.metrics[prefix + '_' + 'cos'] = cos(primary_features, secondary_features)
 
-  def report(self, verbose=True):
+  def report(self, verbose=False):
     """Format and report specified metrics, and update running averages."""
     skip_console = []
 
     def log_to_console(x):
       if not verbose:
         return
+      print(x)
 
     log_to_console("\n--------- Metrics -----------")
     np.set_printoptions(threshold=np.inf)
