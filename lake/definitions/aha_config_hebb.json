@@ -1,28 +1,32 @@
 {
   "seed": 42,
 
+  "experiment_name": "one_shot",
+
   "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
 
   "pretrain_epochs": 10,
   "pretrain_batch_size": 128,
-  "pretrained_model_path": "./pretrained_model_15.pt",
 
   "study_steps": 120,
   "study_batch_size": 20,
 
   "dataset":  "Omniglot-Instance",
 
+  "noise_factor": 0.0,
+  "degrade_factor": 0.0,
+
   "ltm_type": "vc",
   "stm_type": "aha",
 
   "metrics": {
-    "prefixes": ["ca3", "ec_out_", "ec_out_rf_"],
-    "primary_feature_names": ["study.stm_ca3", "study.stm_recon_ec", "recall.stm_recon_ec"],
-    "primary_label_names": ["study.labels","study.labels", "recall.labels"],
-    "secondary_feature_names": ["recall.stm_ca3", "recall.stm_recon_ec", "study.stm_recon_ec"],
-    "secondary_label_names": ["recall.labels", "recall.labels", "study.labels"],
-    "comparison_types": ["match_mse", "match_mse", "match_mse"]
+    "prefixes": ["ltm_sf", "ca3", "ca3_cue_rf", "ec_out", "ec_out_rf"],
+    "primary_feature_names": ["study.ltm_vc", "study.stm_ca3","recall.stm_ca3_cue", "study.stm_recon_ec", "recall.stm_recon_ec"],
+    "primary_label_names": ["study.labels", "study.labels", "recall.labels","study.labels", "recall.labels"],
+    "secondary_feature_names": ["recall.ltm_vc", "recall.stm_ca3","study.stm_ca3_cue", "recall.stm_recon_ec", "study.stm_recon_ec"],
+    "secondary_label_names": ["recall.labels", "recall.labels", "study.labels", "recall.labels", "study.labels"],
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse", "match_mse"]
   },
 
   "ltm": {
@@ -83,12 +87,12 @@
         "learning_rate": 0.01,
         "weight_decay": 0.00004,
 
-        "num_units": 100,
+        "num_units": 200,
         "input_dropout": 0.0,
         "hidden_dropout": 0.0,
 
         "encoder_nonlinearity": "leaky_relu",
-        "decoder_nonlinearity": "leaky_relu",
+        "decoder_nonlinearity": "none",
         "use_bias": true,
         "norm_inputs": true
     },
