@@ -26,7 +26,7 @@ class CLS(nn.Module):
 
   def __init__(self, input_shape, config, device=None, writer=None):
     super(CLS, self).__init__()
-
+    print ("\n\nself.writer = writer: ", writer)
     self.config = config
     self.writer = writer
     self.device = device

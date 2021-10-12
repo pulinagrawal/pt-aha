@@ -105,18 +105,7 @@ class AHA(MemoryInterface):
     outputs = {}
     features = {}
 
-    normed_inputs = inputs
-    frobenius_norm = torch.sqrt(
-        torch.sum(torch.square(inputs),
-                  dim=[1, 2, 3],
-                  keepdim=True)
-    )
-
-    normed_inputs = normed_inputs / frobenius_norm
-
-    outputs['ec_in'] = inputs
-
-    outputs['dg'] = self.dg(normed_inputs)
+    outputs['dg'] = self.dg(inputs)
     features['dg'] = outputs['dg'].detach().cpu()
 
     # Compute DG Overlap
@@ -125,7 +114,7 @@ class AHA(MemoryInterface):
 
     # Perforant Pathway: Hebbian Learning
     if self.is_hebbian_perforant():
-      ca3_cue, losses['dg_ca3'], losses['ec_ca3'], losses['ca3_cue'] = self.perforant(ec_inputs=normed_inputs, dg_inputs=outputs['dg'])
+      ca3_cue, losses['dg_ca3'], losses['ec_ca3'], losses['ca3_cue'] = self.perforant(ec_inputs=inputs, dg_inputs=outputs['dg'])
 
       features['ca3_cue'] = ca3_cue.detach().cpu()
 
