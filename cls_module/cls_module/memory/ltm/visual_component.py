@@ -35,7 +35,7 @@ class Trim(nn.Module):
 
     def forward(self, x):
         # return x[:, :, :28, :28]
-        return x[:, :, :105, :105]
+        return x[:, :, :52, :52]
 
 
 class beta_VAE(nn.Module):
@@ -67,18 +67,25 @@ class beta_VAE(nn.Module):
             nn.Conv2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             nn.LeakyReLU(0.01), 
             nn.Conv2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
-            nn.Flatten(),
+            # nn.Flatten(),
         ) 
         # self.z_mean = torch.nn.Linear(46656, 30)
         # self.z_log_var = torch.nn.Linear(46656, 30)
-        self.z_mean = torch.nn.Linear(12544, 30)
-        self.z_log_var = torch.nn.Linear(12544, 30)
+        # self.z_mean = torch.nn.Linear(12544, 30)
+        # self.z_log_var = torch.nn.Linear(12544, 30)
         # self.z_mean = torch.nn.Linear(10816, 30)
         # self.z_log_var = torch.nn.Linear(10816, 30)
 
+        self.z_mean = nn.Sequential(
+            nn.Flatten(), 
+            torch.nn.Linear(10816, 30))
+        self.z_log_var = nn.Sequential(
+            nn.Flatten(), 
+            torch.nn.Linear(10816, 30))
+
         self.decoder = nn.Sequential(
-            torch.nn.Linear(30, 12544),
-            Reshape(-1, 64, 14, 14),
+            torch.nn.Linear(30, 10816),
+            Reshape(-1, 64, 13, 13),
             # Reshape(-1, 64, 13, 13),
             nn.ConvTranspose2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             nn.LeakyReLU(0.01),
@@ -92,9 +99,9 @@ class beta_VAE(nn.Module):
             )
 
     def encode(self, x, stride):
-        x = self.encoder(x)
-        z_mean, z_log_var = self.z_mean(x), self.z_log_var(x)
-        encoding = self.reparameterize(z_mean, z_log_var)
+        encoding = self.encoder(x)
+        # z_mean, z_log_var = self.z_mean(x), self.z_log_var(x)
+        # encoding = self.reparameterize(z_mean, z_log_var)
         return encoding
         
     def reparameterize(self, z_mu, z_log_var):
@@ -111,10 +118,29 @@ class beta_VAE(nn.Module):
         # print("\nhi\n")
         return encoding, decoding
 
-    def decode(self, x, stride):
-        # print("\nhi2\n")
-        decoding = self.decoder(x)
-        return decoding
+    # def encode(self, x, stride):
+    #     encoding = self.encoder(x)
+    #     return encoding
+        
+    # def reparameterize(self, z_mu, z_log_var):
+    #     eps = torch.randn(z_mu.size(0), z_mu.size(1))
+    #     z = z_mu + eps * torch.exp(z_log_var/2.) 
+    #     return z
+        
+    # def forward(self, x, stride):
+    #     encoding = self.encoder(x)
+    #     z_mean, z_log_var = self.z_mean(x), self.z_log_var(x)
+    #     # encoding = self.reparameterize(z_mean, z_log_var)
+    #     # print(encoding.size())
+    #     decoding = self.decoder(self.reparameterize(z_mean, z_log_var))
+    #     # print("\nhi\n")
+    #     return encoding, decoding
+
+
+    # def decode(self, x, stride):
+    #     # print("\nhi2\n")
+    #     decoding = self.decoder(x)
+    #     return decoding
 
 
 class VisualComponent(MemoryInterface):
@@ -139,27 +165,30 @@ class VisualComponent(MemoryInterface):
         with torch.no_grad():
             stride = self.config.get('eval_stride', self.config.get('stride'))
             sample_input = torch.rand(1, *(self.input_shape[1:])).to(self.device)
-            # print ("\nSample: ", sample_input)
+            print ("\nsample_input check in my visual_comp: ", sample_input)
+            print ("\nsample_input.shape check in my visual_comp: ", sample_input.shape)
             sample_output = vc.encode(sample_input, stride=stride)
-            # print ("\n\n Sample output shape: ", sample_output.shape)
-            # print ("\n\n ")
-            sample_output = self.prepare_encoding(sample_output)
+            print ("\n sample_output.shape check in my visual_comp after vc.encode: ", sample_output.shape)
+            print ("\n\n ")
+            # sample_output = self.prepare_encoding(sample_output)
+            # print ("\n sample_output.shape check in my visual_comp after prepare_encoding: ", sample_output.shape)
             self.output_shape = list(sample_output.data.shape)
+            print ("\n self.output_shape check in my visual_comp: ", list(sample_output.data.shape))
             self.output_shape[0] = -1
 
         # if 'classifier' in self.config:
         #     self.build_classifier(input_shape=self.output_shape)
 
-    def forward_decode(self, encoding): 
-        # Optionally use different stride at test time
-        stride = self.config['stride']
-        if not self.vc.training and 'eval_stride' in self.config:
-            stride = self.config['eval_stride']
+    # def forward_decode(self, encoding): 
+    #     # Optionally use different stride at test time
+    #     stride = self.config['stride']
+    #     if not self.vc.training and 'eval_stride' in self.config:
+    #         stride = self.config['eval_stride']
 
-        encoding = self.unprepare_encoding(encoding)
+    #     encoding = self.unprepare_encoding(encoding)
 
-        with torch.no_grad():
-            return self.vc.decode(encoding, stride)
+    #     with torch.no_grad():
+    #         return self.vc.decode(encoding, stride)
 
     def forward_memory(self, inputs, targets, labels):    
 
@@ -199,7 +228,7 @@ class VisualComponent(MemoryInterface):
     def prepare_encoding(self, encoding):
         
         """Postprocessing for the VC encoding."""
-        encoding = encoding.detach()
+        # encoding = encoding.detach()
 
         # if self.config['output_pool_size'] > 1:
         #     encoding, self.pool_indices = F.max_pool2d(
@@ -210,18 +239,18 @@ class VisualComponent(MemoryInterface):
 
         return encoding
 
-    def unprepare_encoding(self, prepared_encoding):
+    # def unprepare_encoding(self, prepared_encoding):
 
-        """Undo any postprocessing for the VC encoding."""
-        encoding = prepared_encoding
-        encoding = prepared_encoding.detach()
+    #     """Undo any postprocessing for the VC encoding."""
+    #     encoding = prepared_encoding
+    #     encoding = prepared_encoding.detach()
 
-        # if self.config['output_pool_size'] > 1:
-        #     encoding = F.max_unpool2d(
-        #         encoding,
-        #         kernel_size=self.config['output_pool_size'],
-        #         stride=self.config['output_pool_stride'],
-        #         padding=self.config.get('output_pool_padding', 0),
-        #         indices=self.pool_indices)
+    #     # if self.config['output_pool_size'] > 1:
+    #     #     encoding = F.max_unpool2d(
+    #     #         encoding,
+    #     #         kernel_size=self.config['output_pool_size'],
+    #     #         stride=self.config['output_pool_stride'],
+    #     #         padding=self.config.get('output_pool_padding', 0),
+    #     #         indices=self.pool_indices)
 
-        return encoding
+    #     return encoding

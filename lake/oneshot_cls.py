@@ -87,6 +87,7 @@ def main():
     summary_dir = previous_run_path
     print("\n\nsummary_dir if : ", summary_dir)
     writer = SummaryWriter(log_dir=summary_dir)
+    print("if prev_pretrain_path Image Shape sent from oneshot to cls : ", image_shape)
     model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
     # Ensure that pretrained model path doesn't exist so that training occurs
@@ -130,6 +131,7 @@ def main():
     print("\n\nsummary_dir else : ", summary_dir)
     writer = SummaryWriter(log_dir=summary_dir)
     print("\n\nwriter else : ", writer)
+    print("else prev_pretrain_path Image Shape sent from oneshot to cls : ", image_shape)
     model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
   if not pretrained_model_path:
