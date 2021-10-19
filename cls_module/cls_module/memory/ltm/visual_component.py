@@ -42,19 +42,6 @@ class beta_VAE(nn.Module):
     def __init__(self, input_shape, config, output_shape=None):
         super().__init__()
 
-        # self.input_shape = list(input_shape)
-        # self.input_size = np.prod(self.input_shape[1:])
-
-        # if output_shape is None:
-        #     self.output_shape = self.input_shape
-        #     self.output_size = self.input_size
-        # else:
-        #     self.output_shape = list(output_shape)
-        #     self.output_size = np.prod(self.output_shape[1:])
-
-        # self.input_shape[0] = -1
-        # self.output_shape[0] = -1
-
         self.build()
 
     def build(self):           
@@ -65,28 +52,21 @@ class beta_VAE(nn.Module):
             nn.Conv2d(32, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
-            nn.LeakyReLU(0.01), 
+            nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             # nn.Flatten(),
         ) 
-        # self.z_mean = torch.nn.Linear(46656, 30)
-        # self.z_log_var = torch.nn.Linear(46656, 30)
-        # self.z_mean = torch.nn.Linear(12544, 30)
-        # self.z_log_var = torch.nn.Linear(12544, 30)
-        # self.z_mean = torch.nn.Linear(10816, 30)
-        # self.z_log_var = torch.nn.Linear(10816, 30)
 
         self.z_mean = nn.Sequential(
             nn.Flatten(), 
-            torch.nn.Linear(10816, 30))
+            torch.nn.Linear(3136, 30))
         self.z_log_var = nn.Sequential(
             nn.Flatten(), 
-            torch.nn.Linear(10816, 30))
+            torch.nn.Linear(3136, 30))
 
         self.decoder = nn.Sequential(
-            torch.nn.Linear(30, 10816),
-            Reshape(-1, 64, 13, 13),
-            # Reshape(-1, 64, 13, 13),
+            torch.nn.Linear(30, 3136),
+            Reshape(-1, 64, 7, 7),
             nn.ConvTranspose2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             nn.LeakyReLU(0.01),
             nn.ConvTranspose2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),                
@@ -100,8 +80,6 @@ class beta_VAE(nn.Module):
 
     def encode(self, x, stride):
         encoding = self.encoder(x)
-        # z_mean, z_log_var = self.z_mean(x), self.z_log_var(x)
-        # encoding = self.reparameterize(z_mean, z_log_var)
         return encoding
         
     def reparameterize(self, z_mu, z_log_var):
@@ -117,30 +95,6 @@ class beta_VAE(nn.Module):
         decoding = self.decoder(encoding)
         # print("\nhi\n")
         return encoding, decoding
-
-    # def encode(self, x, stride):
-    #     encoding = self.encoder(x)
-    #     return encoding
-        
-    # def reparameterize(self, z_mu, z_log_var):
-    #     eps = torch.randn(z_mu.size(0), z_mu.size(1))
-    #     z = z_mu + eps * torch.exp(z_log_var/2.) 
-    #     return z
-        
-    # def forward(self, x, stride):
-    #     encoding = self.encoder(x)
-    #     z_mean, z_log_var = self.z_mean(x), self.z_log_var(x)
-    #     # encoding = self.reparameterize(z_mean, z_log_var)
-    #     # print(encoding.size())
-    #     decoding = self.decoder(self.reparameterize(z_mean, z_log_var))
-    #     # print("\nhi\n")
-    #     return encoding, decoding
-
-
-    # def decode(self, x, stride):
-    #     # print("\nhi2\n")
-    #     decoding = self.decoder(x)
-    #     return decoding
 
 
 class VisualComponent(MemoryInterface):

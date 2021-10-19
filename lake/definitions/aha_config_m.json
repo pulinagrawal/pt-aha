@@ -112,7 +112,7 @@
         "learning_rate": 0.01,
         "weight_decay": 0.00004,
 
-        "num_units": 100,
+        "num_units": 800,
         "input_dropout": 0.0,
         "hidden_dropout": 0.0,
 
