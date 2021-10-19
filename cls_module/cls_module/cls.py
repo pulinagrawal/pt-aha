@@ -55,8 +55,6 @@ class CLS(nn.Module):
     ltm_config = self.config[self.ltm_key]
     ltm_type = self.config['ltm_type']
 
-    print("============ ltm_type = {0}".format(ltm_type))
-
     if ltm_type == 'vc':
       ltm_class = ltm.VisualComponent
     elif ltm_type == 'vc_bvae':
