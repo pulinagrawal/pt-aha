@@ -80,6 +80,7 @@ class AHA(MemoryInterface):
 
     # Build the CA3
     self.ca3 = KNNBuffer(input_shape=dg_output_shape, target_shape=dg_output_shape, config=self.config['ca3'])
+    self.stored_ca3_cue = None
     ca3_output_shape = dg_output_shape
 
     # Build the Monosynaptic Pathway
@@ -130,8 +131,7 @@ class AHA(MemoryInterface):
 
     # Perforant Pathway: Error-Driven Learning
     else:
-      pr_targets = outputs['dg']
-      # pr_targets = outputs['dg'] if self.training else self.pc_buffer_batch
+      pr_targets = outputs['dg'] if self.training else self.stored_ca3_cue
       losses['pr'], outputs['pr'] = self.perforant(inputs=normed_inputs, targets=pr_targets)
       features['pr'] = outputs['pr']['pr_out'].detach().cpu()
 
@@ -139,6 +139,10 @@ class AHA(MemoryInterface):
       pr_out = outputs['pr']['pr_out']
       pr_batch_size = pr_out.shape[0]
       losses['pr_mismatch'] = torch.sum(torch.abs(pr_targets - pr_out)) / pr_batch_size
+
+      # Store the cue to the CA3 to compare during recall
+      if self.training:
+        self.stored_ca3_cue = outputs['dg']
 
       ca3_cue = outputs['dg'] if self.training else outputs['pr']['z_cue']
 
