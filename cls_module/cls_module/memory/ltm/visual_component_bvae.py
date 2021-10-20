@@ -166,10 +166,13 @@ class VisualComponentBVAE(MemoryInterface):
 
         z_mean, z_log_var = self.vc.get_distribution()
 
-        kl_div = -0.5 * torch.sum(1 + z_log_var - z_mean**2 - torch.exp(z_log_var), axis=1) # sum over latent dimension
+        kl_div_loss = -0.5 * torch.sum(1 + z_log_var - z_mean**2 - torch.exp(z_log_var), axis=1) # sum over latent dimension
+        reconstruction_loss = F.mse_loss(decoding, targets)
 
-        loss = F.mse_loss(decoding, targets)
-
+        k = self.config['recon_loss_const']
+        b = self.config['beta']
+        loss = k * reconstruction_loss + b * kl_div_loss
+        
         if self.vc.training:
             loss.backward()
             self.vc_optimizer.step()
