@@ -29,6 +29,10 @@
   },
 
   "ltm": {
+
+    "recon_loss_const": 1,
+    "beta": 2,
+
     "learning_rate": 0.001,
 
     "filters": 121,
