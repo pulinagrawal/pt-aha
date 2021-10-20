@@ -89,13 +89,15 @@ class beta_VAE(nn.Module):
         
     def forward(self, x, stride):
         x = self.encoder(x)
-        z_mean, z_log_var = self.z_mean(x), self.z_log_var(x)
-        encoding = self.reparameterize(z_mean, z_log_var)
+        self.z_mean, self.z_log_var = self.z_mean(x), self.z_log_var(x)
+        encoding = self.reparameterize(self.z_mean, self.z_log_var)
         # print(encoding.size())
         decoding = self.decoder(encoding)
         # print("\nhi\n")
         return encoding, decoding
 
+    def get_distribution(self):
+        return self.z_mean, self.z_log_var
 
 class VisualComponentBVAE(MemoryInterface):
     """An implementation of a long-term memory module using sparse convolutional autoencoder."""
@@ -161,6 +163,11 @@ class VisualComponentBVAE(MemoryInterface):
             stride = self.config['eval_stride']
 
         encoding, decoding = self.vc(inputs, stride)
+
+        z_mean, z_log_var = self.vc.get_distribution()
+
+        kl_div = -0.5 * torch.sum(1 + z_log_var - z_mean**2 - torch.exp(z_log_var), axis=1) # sum over latent dimension
+
         loss = F.mse_loss(decoding, targets)
 
         if self.vc.training:
