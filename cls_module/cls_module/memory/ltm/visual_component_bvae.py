@@ -163,7 +163,8 @@ class VisualComponentBVAE(MemoryInterface):
         z_m, z_lv = self.vc.get_distribution()
         kl_div_loss = -0.5 * torch.sum(1 + z_lv - z_m**2 - torch.exp(z_lv), axis=1)
         kl_div_loss = kl_div_loss.mean()
-        reconstruction_loss = F.mse_loss(decoding, targets)
+        # reconstruction_loss = F.binary_cross_entropy(decoding, targets, reduction='sum')
+        reconstruction_loss = F.mse_loss(decoding, targets, reduction='sum')
 
         k = self.config['recon_loss_const']
         b = self.config['beta']
