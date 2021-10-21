@@ -309,6 +309,8 @@ class CLS(nn.Module):
     ltm_type = self.config['ltm_type']
     if ltm_type == 'vc':
       return False
+    if ltm_type == 'vc_bvae':
+      return False  
     elif ltm_type == 'vgg':
       return True
     else:

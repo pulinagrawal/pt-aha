@@ -16,7 +16,7 @@
 
   "dataset":  "Omniglot",
 
-  "ltm_type": "vc",
+  "ltm_type": "vc_bvae",
   "stm_type": "aha",
 
   "metrics": {

@@ -1,5 +1,5 @@
 """VisualComponent class."""
-
+# 13 oct
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,17 +8,10 @@ import torch.nn.functional as F
 from cerenaut_pt_core import utils
 
 from cls_module.memory.interface import MemoryInterface
-# from cerenaut_pt_core.components.sparse_autoencoder import SparseAutoencoder
 
 import numpy as np
 import torch.nn.functional as F
 
-# Device - cuda vs. cpu
-# cuda = torch.cuda.is_available()
-# DEVICE = torch.device("cuda:0" if cuda else "cpu")
-
-# # Hyperparameters
-# RANDOM_SEED = 123
 
 class Reshape(nn.Module):
     def __init__(self, *args):
@@ -34,7 +27,6 @@ class Trim(nn.Module):
         super().__init__()
 
     def forward(self, x):
-        # return x[:, :, :28, :28]
         return x[:, :, :52, :52]
 
 
@@ -52,17 +44,18 @@ class beta_VAE(nn.Module):
             nn.Conv2d(32, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
-            nn.LeakyReLU(0.01),
+            nn.LeakyReLU(0.01), 
             nn.Conv2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
-            # nn.Flatten(),
+            nn.Flatten(),
         ) 
-
-        self.z_mean = nn.Sequential(
-            nn.Flatten(), 
-            torch.nn.Linear(3136, 30))
-        self.z_log_var = nn.Sequential(
-            nn.Flatten(), 
-            torch.nn.Linear(3136, 30))
+        # self.z_mean = nn.Sequential(
+        #     nn.Flatten(), 
+        #     torch.nn.Linear(3136, 30))
+        # self.z_log_var = nn.Sequential(
+        #     nn.Flatten(), 
+        #     torch.nn.Linear(3136, 30))
+        self.z_mean = torch.nn.Linear(3136, 30)
+        self.z_log_var = torch.nn.Linear(3136, 30)
 
         self.decoder = nn.Sequential(
             torch.nn.Linear(30, 3136),
@@ -79,25 +72,30 @@ class beta_VAE(nn.Module):
             )
 
     def encode(self, x, stride):
-        encoding = self.encoder(x)
+        x = self.encoder(x)
+        z_mean, z_log_var = self.z_mean(x), self.z_log_var(x)
+        encoding = self.reparameterize(z_mean, z_log_var)
         return encoding
         
     def reparameterize(self, z_mu, z_log_var):
-        eps = torch.randn(z_mu.size(0), z_mu.size(1))
+        eps = torch.randn(z_mu.size(0), z_mu.size(1)).to(z_mu.device)
         z = z_mu + eps * torch.exp(z_log_var/2.) 
+        # print("\nz\n". type(z))
         return z
         
     def forward(self, x, stride):
         x = self.encoder(x)
-        self.z_mean, self.z_log_var = self.z_mean(x), self.z_log_var(x)
-        encoding = self.reparameterize(self.z_mean, self.z_log_var)
-        # print(encoding.size())
+        # z_mean, z_log_var = self.z_mean(x), self.z_log_var(x)
+        # encoding = self.reparameterize(z_mean, z_log_var)
+        self.z_m, self.z_lv = self.z_mean(x), self.z_log_var(x)
+        encoding = self.reparameterize(self.z_m, self.z_lv)
         decoding = self.decoder(encoding)
-        # print("\nhi\n")
         return encoding, decoding
 
     def get_distribution(self):
-        return self.z_mean, self.z_log_var
+        return self.z_m, self.z_lv
+        # return self.z_mean, self.z_log_var
+
 
 class VisualComponentBVAE(MemoryInterface):
     """An implementation of a long-term memory module using sparse convolutional autoencoder."""
@@ -108,9 +106,6 @@ class VisualComponentBVAE(MemoryInterface):
     def build(self):
 
         LEARNING_RATE = 0.0005
-
-        # if you want to use the config for more convenience, you can do the following, there is a corresponding field in the config json:
-        # learning_rate = self.config['learning_rate']
 
         """Build Visual Component as long-term memory module."""
         # print("\n\n\nprint", self.input_shape)
@@ -163,16 +158,17 @@ class VisualComponentBVAE(MemoryInterface):
             stride = self.config['eval_stride']
 
         encoding, decoding = self.vc(inputs, stride)
+        # loss = F.mse_loss(decoding, targets)
 
-        z_mean, z_log_var = self.vc.get_distribution()
-
-        kl_div_loss = -0.5 * torch.sum(1 + z_log_var - z_mean**2 - torch.exp(z_log_var), axis=1) # sum over latent dimension
+        z_m, z_lv = self.vc.get_distribution()
+        kl_div_loss = -0.5 * torch.sum(1 + z_lv - z_m**2 - torch.exp(z_lv), axis=1)
+        kl_div_loss = kl_div_loss.mean()
         reconstruction_loss = F.mse_loss(decoding, targets)
 
         k = self.config['recon_loss_const']
         b = self.config['beta']
         loss = k * reconstruction_loss + b * kl_div_loss
-        
+
         if self.vc.training:
             loss.backward()
             self.vc_optimizer.step()
