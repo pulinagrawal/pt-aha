@@ -1,7 +1,7 @@
 """SequenceGenerator class."""
 import numpy as np
 from igraph import Graph
-from random import randint, choice
+from random import randint, choice, shuffle
 from itertools import islice
 
 
@@ -44,7 +44,7 @@ be CD. """
         elif self.type == "episodic":
             return self.core_sequence
         else:
-            raise NotImplementedError('Learning type must be statistical or episodic.')
+            raise NotImplementedError('Learning type must be statistical or episodic in pairs structure experiments.')
 
     def _create_sequence(self):
         first = range(0, self.characters, 2)
@@ -64,16 +64,17 @@ be CD. """
             core_idx = np.random.randint(0, self.characters / 2, self.length)
             seq = [(first[a], second[a]) for a in core_idx]
         else:
-            raise NotImplementedError('Learning type must be statistical or episodic.')
+            raise NotImplementedError('Learning type must be statistical or episodic in pairs structure experiments.')
 
         return seq
 
 
 class SequenceGeneratorGraph:
 
-    def __init__(self, characters, seq_length, community):
+    def __init__(self, characters, seq_length, type, community):
         self.characters = int(characters / community)
         self.community = community
+        self.type = type
         self.length = seq_length
         self.core_label_sequence = self._create_label_sequence()
         self.sequence = self._create_sequence()
@@ -96,9 +97,16 @@ class SequenceGeneratorGraph:
         return edges
 
     def _create_sequence(self):
-        walk = list(islice(self._random_walk(), self.length))
-        seq = [(walk[i], walk[i + 1]) for i in range(len(walk) - 1)]
-        return seq
+        if self.type == "static":
+            seq = self.core_label_sequence
+            seq = seq*int(self.length / len(seq))
+            return seq
+        elif self.type == "random":
+            walk = list(islice(self._random_walk(), self.length))
+            seq = [(walk[i], walk[i + 1]) for i in range(len(walk) - 1)]
+            return seq
+        else:
+            raise NotImplementedError('Learning type must be random or static in community experiments')
 
     def _random_walk(self, start=0):
         g = Graph(self.core_label_sequence)
@@ -106,3 +114,44 @@ class SequenceGeneratorGraph:
         while True:
             yield current
             current = choice(g.successors(current))
+
+
+class SequenceGeneratorTriads:
+
+    def __init__(self, characters, seq_length, type):
+        self.characters = characters
+        self.length = seq_length
+        self.type = type
+        self.core_label_sequence = self._create_label_sequence()
+        self.sequence = self._create_sequence()
+
+
+    def _create_label_sequence(self):
+        if self.characters % 3 != 0:
+            self.characters += (3 - (10 % 3))
+            print("Number of characters was increased to next even number to create pairs.")
+        seq = []
+        for a in range(0, self.characters, 3):
+            seq = seq + [(a, a + 1), (a + 1, a + 2)]
+        return seq
+
+
+    def _create_sequence(self):
+        if self.type == 'recurrence':
+            seq = self.core_label_sequence*10
+            shuffle(seq)
+            for i in range(0, int(self.length / len(seq)) - 1):
+                tmp = self.core_label_sequence*10
+                shuffle(tmp)
+                seq = seq + tmp
+            return seq
+        elif self.type == 'static':
+            seq = self.core_label_sequence
+            shuffle(seq)
+            for i in range(0, int(self.length / len(seq)) - 1):
+                tmp = self.core_label_sequence
+                shuffle(tmp)
+                seq = seq + tmp
+            return seq
+        else:
+            raise NotImplementedError('Learning type must be recurrence or static in associative experiments')

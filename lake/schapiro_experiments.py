@@ -12,7 +12,7 @@ import glob
 from scipy import stats
 from torch.utils.tensorboard import SummaryWriter
 from cls_module.cls import CLS
-from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph
+from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph, SequenceGeneratorTriads
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
 from Visualisations import HeatmapPlotter
@@ -49,22 +49,22 @@ def main():
     now = datetime.datetime.now()
     experiment_time = now.strftime("%Y%m%d-%H%M%S")
 
-    if experiment not in ["pairs_structure", "community_structure"]:
+
+    if experiment not in ["pairs_structure", "community_structure", "associative_inference"]:
         experiment = "pairs_structure"
-        print("Experiment NOT specified. Must be pairs_structure or community_structure. "
+        print("Experiment NOT specified. Must be pairs_structure, community_structure or associative_inference "
               "Set to pairs_structure by default.")
 
     if experiment == "community_structure":
         learning_type = experiment
 
-    main_summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time, main_folder=True)
-
+    main_summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time,
+                                             main_folder=True)
 
     for _ in range(seeds):
 
         seed = np.random.randint(1, 10000)
         utils.set_seed(seed)
-        # np.random.seed(seed) if it is inside utils, do we need it here?
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -76,58 +76,46 @@ def main():
         alphabet_name = config.get('alphabet')
 
         pretrained_model_path = config.get('pretrained_model_path', None)
-        previous_run_path = config.get('previous_run_path', None)
-        train_from = config.get('train_from', None)
 
         # Pretraining
         # ---------------------------------------------------------------------------
         start_epoch = 1
 
-        if previous_run_path:
-            summary_dir = previous_run_path
+        if pretrained_model_path:
+            summary_dir = pretrained_model_path
             writer = SummaryWriter(log_dir=summary_dir)
             model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
-            if train_from == 'scratch':
-                # Clear the directory
-                for file in os.listdir(previous_run_path):
-                    path = os.path.join(previous_run_path, file)
-                    try:
-                        os.unlink(os.path.join(path))
-                    except Exception as e:
-                        print(f"Failed to remove file with path {path} due to exception {e}")
-
-            elif train_from == 'latest':
-                model_path = os.path.join(previous_run_path, 'pretrained_model_*')
-                print(model_path)
+            model_path = os.path.join(pretrained_model_path, 'pretrained_model_*')
+            print(model_path)
                 # Find the latest file in the directory
-                latest = max(glob.glob(model_path), key=os.path.getctime)
+            latest = max(glob.glob(model_path), key=os.path.getctime)
 
-                # Find the epoch that was stopped on
-                i = len(latest) - 4  # (from before the .pt)
-                latest_epoch = 0
-                while latest[i] != '_':
-                    latest_epoch *= 10
-                    latest_epoch += int(latest[i])
-                    i -= 1
+            # Find the epoch that was stopped on
+            i = len(latest) - 4  # (from before the .pt)
+            latest_epoch = 0
+            while latest[i] != '_':
+                latest_epoch *= 10
+                latest_epoch += int(latest[i])
+                i -= 1
 
-                if latest_epoch < config['pretrain_epochs']:
-                    start_epoch = latest_epoch + 1
+            if latest_epoch < config['pretrain_epochs']:
+                start_epoch = latest_epoch + 1
 
-                print("Attempting to find existing checkpoint")
-                if os.path.exists(latest):
-                    try:
-                        model.load_state_dict(torch.load(latest))
-                    except Exception as e:
-                         print("Failed to load model from path: {latest}. Please check path and try again due to exception {e}.")
-                         return
+            print("Attempting to find existing checkpoint")
+            if os.path.exists(latest):
+                try:
+                    pretrained_model_path = latest
+                    model.load_state_dict(torch.load(latest))
+                except Exception as e:
+                    print("Failed to load model from path: {latest}. Please check path and try again due to exception {e}.")
+                    return
 
         else:
             summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time, main_folder=False)
             writer = SummaryWriter(log_dir=summary_dir)
             model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
-        if not pretrained_model_path:
             dataset = OmniglotAlphabet('./data', alphabet_name, False, writer_idx='any', download=True, transform=image_tfms,
                                        target_transform=None)
 
@@ -207,6 +195,9 @@ def main():
         elif experiment == "community_structure":
             sequence_study = SequenceGeneratorGraph(characters, length, communities)
             sequence_recall = SequenceGeneratorGraph(characters, length, communities)
+        elif experiment == "associative_inference":
+            sequence_study = SequenceGeneratorTriads(characters, length, learning_type)
+            sequence_recall = SequenceGeneratorTriads(characters, length, learning_type)
 
 
         sequence_study_tensor = torch.FloatTensor(sequence_study.sequence)
@@ -277,7 +268,7 @@ def main():
 
             # Study
             # --------------------------------------------------------------------------
-            for step in range(config['study_steps']):
+            for step in range(config['settled_response_steps']):
                 study_train_losses, _ = model(study_data, study_target, mode='study')
                 study_train_loss = study_train_losses['stm']['memory']['loss']
 
@@ -288,7 +279,7 @@ def main():
                                                                  study_train_loss['pm_ec'].item()))
                 model(recall_data, recall_target, mode='study_validate')
 
-                if step == (config['initial_response_step']-1) or step == (config['study_steps']-1):
+                if step == (config['initial_response_step']-1) or step == (config['settled_response_steps']-1):
                     with torch.no_grad():
                         _, recall_outputs = model(recall_data, recall_target, mode='recall')
                         cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
@@ -390,10 +381,10 @@ def main():
                 utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
 
         # Save results
-        predictions_initial = predictions[0:config['study_steps']:2]
-        predictions_settled = predictions[1:config['study_steps']:2]
-        pearson_r_initial = {a: pearson_r_tensor[a][1:config['study_steps']:2] for a in pearson_r_tensor}
-        pearson_r_settled = {a: pearson_r_tensor[a][2:config['study_steps']+1:2] for a in pearson_r_tensor}
+        predictions_initial = predictions[0:config['settled_response_steps']:2]
+        predictions_settled = predictions[1:config['settled_response_steps']:2]
+        pearson_r_initial = {a: pearson_r_tensor[a][1:config['settled_response_steps']:2] for a in pearson_r_tensor}
+        pearson_r_settled = {a: pearson_r_tensor[a][2:config['settled_response_steps']+1:2] for a in pearson_r_tensor}
         pearson_r_initial = {a: torch.mean(pearson_r_initial[a], 0) for a in pearson_r_initial}
         pearson_r_settled = {a: torch.mean(pearson_r_settled[a], 0) for a in pearson_r_settled}
 
@@ -425,11 +416,11 @@ def main():
         writer.flush()
         writer.close()
 
-    for a in pearson_r_initial.keys():
-        heatmap_initial = HeatmapPlotter(main_summary_dir, "pearson_initial_" + a)
-        heatmap_settled = HeatmapPlotter(main_summary_dir, "pearson_settled_" + a)
-        heatmap_initial.create_heatmap()
-        heatmap_settled.create_heatmap()
+    # for a in pearson_r_initial.keys():
+    #     heatmap_initial = HeatmapPlotter(main_summary_dir, "pearson_initial_" + a)
+    #     heatmap_settled = HeatmapPlotter(main_summary_dir, "pearson_settled_" + a)
+    #     heatmap_initial.create_heatmap()
+    #     heatmap_settled.create_heatmap()
 
 
 def add_empty_character(images, mirror=False):
