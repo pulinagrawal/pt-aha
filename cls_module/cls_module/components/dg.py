@@ -103,7 +103,7 @@ class DG(nn.Module):
     assert ((batch_size * n - 1) + n) < hidden_size, "Can't produce batch_size {0} non-overlapping samples, " \
            "reduce n {1} or increase sample_size {2}".format(batch_size, n, hidden_size)
 
-    batch = torch.zeros(batch_size, hidden_size)
+    batch = torch.zeros(batch_size, hidden_size).to(x.device)
 
     # Return the sample at given index
     for idx in range(batch_size):
