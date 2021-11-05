@@ -24,6 +24,7 @@ class CLS(nn.Module):
   ltm_key = 'ltm'
   ec_key = 'ec'
   stm_key = 'stm'
+  decoder_key = 'decoder'
 
   def __init__(self, input_shape, config, device=None, writer=None):
     super(CLS, self).__init__()
@@ -112,33 +113,34 @@ class CLS(nn.Module):
     self.add_module(self.stm_key, stm_)
 
     # 4) _________ decoder ____________________________________
-    decoder_config = self.config['decoder']
-    decoder_layers = []
-    decoder_input_size = np.prod(list(next_input)[1:])
-    decoder_hidden_size = decoder_config['units'][0]
-    decoder_output_size = np.prod(list(self.input_shape)[1:])
+    if 'decoder' in self.config:
+      decoder_config = self.config['decoder']
+      decoder_layers = []
+      decoder_input_size = np.prod(list(next_input)[1:])
+      decoder_hidden_size = decoder_config['units'][0]
+      decoder_output_size = np.prod(list(self.input_shape)[1:])
 
-    for i in range(decoder_config['num_layers']):
+      for i in range(decoder_config['num_layers']):
+        decoder_layers.extend([
+          ('layer_' + str(i), nn.Linear(decoder_input_size, decoder_hidden_size)),
+          ('act_' + str(i), nn.LeakyReLU())
+        ])
+
+        if i < (decoder_config['num_layers'] - 1):
+          decoder_input_size = decoder_hidden_size
+          decoder_hidden_size = decoder_config['units'][i + 1]
+
       decoder_layers.extend([
-        ('layer_' + str(i), nn.Linear(decoder_input_size, decoder_hidden_size)),
-        ('act_' + str(i), nn.LeakyReLU())
+        ('output_layer', nn.Linear(decoder_hidden_size, decoder_output_size)),
+        ('output_act', nn.LeakyReLU())
       ])
 
-      if i < (decoder_config['num_layers'] - 1):
-        decoder_input_size = decoder_hidden_size
-        decoder_hidden_size = decoder_config['units'][i + 1]
+      print(decoder_layers)
 
-    decoder_layers.extend([
-      ('output_layer', nn.Linear(decoder_hidden_size, decoder_output_size)),
-      ('output_act', nn.LeakyReLU())
-    ])
-
-    print(decoder_layers)
-
-    self.decoder = nn.Sequential(OrderedDict(decoder_layers))
-    self.decoder_optimizer = torch.optim.Adam(self.decoder.parameters(),
-                                              lr=decoder_config['learning_rate'],
-                                              weight_decay=decoder_config['weight_decay'])
+      self.decoder = nn.Sequential(OrderedDict(decoder_layers))
+      self.decoder_optimizer = torch.optim.Adam(self.decoder.parameters(),
+                                                lr=decoder_config['learning_rate'],
+                                                weight_decay=decoder_config['weight_decay'])
 
   def reset(self, names=None):
     """Reset relevant sub-modules."""
@@ -328,18 +330,19 @@ class CLS(nn.Module):
       losses[self.stm_key], outputs[self.stm_key] = self.stm(inputs=next_input, targets=inputs, labels=labels)
 
       # iterate decoder
-      losses['decoder'], outputs['decoder'] = self.forward_decoder(inputs=next_input, targets=inputs, training=self.training)
+      if self.decoder_key in self._modules:
+        losses['decoder'], outputs['decoder'] = self.forward_decoder(inputs=next_input, targets=inputs, training=self.training)
 
-      # Decode output from STM via the EC <=> LTM
-      if outputs[self.stm_key]['memory']['decoding'] is None:
-        output_decoding = outputs[self.stm_key]['memory']['decoding_ec']
+        # Decode output from STM via the EC <=> LTM
+        if outputs[self.stm_key]['memory']['decoding'] is None:
+          output_decoding = outputs[self.stm_key]['memory']['decoding_ec']
 
-        with torch.no_grad():
-          _, decoder_outputs = self.forward_decoder(inputs=output_decoding, targets=inputs, training=False)
-          output_decoding = decoder_outputs['ltm']['decoding']
+          with torch.no_grad():
+            _, decoder_outputs = self.forward_decoder(inputs=output_decoding, targets=inputs, training=False)
+            output_decoding = decoder_outputs['ltm']['decoding']
 
-        outputs[self.stm_key]['memory']['decoding'] = output_decoding.detach()
-        self.stm.features['recon'] = output_decoding.detach().cpu()
+          outputs[self.stm_key]['memory']['decoding'] = output_decoding.detach()
+          self.stm.features['recon'] = output_decoding.detach().cpu()
 
       preds = outputs[self.stm_key]['classifier']['predictions']
 
