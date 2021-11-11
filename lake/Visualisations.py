@@ -47,7 +47,8 @@ class HeatmapPlotter:
         plt.figure()
         ax = plt.axes()
         r_heatmap = sns.heatmap(data_mean, xticklabels=labels, yticklabels=labels, cmap="RdYlBu_r",
-                                vmin=-0.1, vmax=1, ax=ax)
+                               # vmin=-0.1, vmax=1, ax=ax)
+                                ax=ax)
         ax.set_title(self.component)
         figure = r_heatmap.get_figure()
         figure.savefig(os.path.join(self.path, self.component + '.png'), dpi=300)
