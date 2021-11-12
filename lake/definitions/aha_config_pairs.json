@@ -40,10 +40,12 @@
   },
   "decoder": {
     "learning_rate": 0.01,
-    "weight_decay": 0.0004,
+    "weight_decay": 0.00004,
 
-    "num_layers": 2,
-    "units": [100, 100],
+    "input_dropout": 0.25,
+
+    "num_layers": 1,
+    "units": [800],
 
     "norm_inputs": true
   },

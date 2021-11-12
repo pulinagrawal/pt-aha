@@ -190,6 +190,7 @@ def main():
 
         # Load the pretrained model
         model = CLS(image_shape, config, device=device, writer=writer).to(device)
+        model.load_state_dict(torch.load(pretrained_model_path))
 
         # Study and Recall
         # ---------------------------------------------------------------------------
@@ -280,7 +281,6 @@ def main():
                 recall_target = recall_target.to(device)
 
                 # Reset to saved model
-                model.load_state_dict(torch.load(pretrained_model_path))
                 model.reset()
 
                 # Study
@@ -319,11 +319,11 @@ def main():
                                     recall_outputs_flat = torch.flatten(
                                         recall_outputs["stm"]["memory"]['decoding'],
                                         start_dim=1)
-                                    similarity = [[cos(a, b) for b in main_pairs_flat] for a in recall_outputs_flat]
+                                    similarity = [[cos(a, b) for b in main_pairs_flat.cpu()] for a in recall_outputs_flat.cpu()]
                                     similarity_idx = [t.index(max(t)) for t in similarity]
                                     predictions.extend([[labels_study[a] for a in similarity_idx]])
 
-                                recall_outputs_flat = recall_outputs_flat[0:characters]
+                                recall_outputs_flat = recall_outputs_flat[0:characters].cpu()
                                 pearson_r = [[stats.pearsonr(a, b)[0] for a in recall_outputs_flat] for b in
                                              recall_outputs_flat]
                                 pearson_r = torch.tensor(pearson_r)
