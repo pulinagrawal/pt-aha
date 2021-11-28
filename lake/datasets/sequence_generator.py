@@ -118,9 +118,10 @@ class SequenceGeneratorGraph:
 
 class SequenceGeneratorTriads:
 
-    def __init__(self, characters, seq_length, type):
+    def __init__(self, characters, seq_length, type, batch_size):
         self.characters = characters
         self.length = seq_length
+        self.sub_length = batch_size
         self.type = type
         self.core_label_sequence = self._create_label_sequence()
         self.sequence = self._create_sequence()
@@ -138,17 +139,17 @@ class SequenceGeneratorTriads:
 
     def _create_sequence(self):
         if self.type == 'recurrence':
-            seq = self.core_label_sequence*10
-            shuffle(seq)
-            for i in range(0, int(self.length / len(seq)) - 1):
-                tmp = self.core_label_sequence*10
+            tmp= self.core_label_sequence*(self.sub_length//len(self.core_label_sequence))
+            shuffle(tmp)
+            seq = tmp
+            for _ in range(0, int(self.length / len(seq)) - 1):
                 shuffle(tmp)
                 seq = seq + tmp
             return seq
         elif self.type == 'static':
             seq = self.core_label_sequence
             shuffle(seq)
-            for i in range(0, int(self.length / len(seq)) - 1):
+            for _ in range(0, int(self.length / len(seq)) - 1):
                 tmp = self.core_label_sequence
                 shuffle(tmp)
                 seq = seq + tmp

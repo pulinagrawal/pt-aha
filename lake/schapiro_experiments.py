@@ -46,7 +46,7 @@ def main():
     seeds = config['seeds']
     experiment = config.get('experiment_name')
     learning_type = config.get('learning_type')
-    components = config.get('test_stm_components')
+    components = config.get('test_components')
     now = datetime.datetime.now()
     experiment_time = now.strftime("%Y%m%d-%H%M%S")
 
@@ -75,122 +75,115 @@ def main():
         image_tfms_blur = image_tfms
 
     image_shape = config['image_shape']
+    final_shape = config['pairs_shape']
     alphabet_name = config.get('alphabet')
-
     pretrained_model_path = config.get('pretrained_model_path', None)
-
-    # Pretraining
-    # ---------------------------------------------------------------------------
-    start_epoch = 1
-
-    if pretrained_model_path:
-        summary_dir = pretrained_model_path
-        writer = SummaryWriter(log_dir=summary_dir)
-        model = CLS(image_shape, config, device=device, writer=writer).to(device)
-
-        model_path = os.path.join(pretrained_model_path, 'pretrained_model_*')
-        print(model_path)
-        # Find the latest file in the directory
-        latest = max(glob.glob(model_path), key=os.path.getctime)
-
-        # Find the epoch that was stopped on
-        i = len(latest) - 4  # (from before the .pt)
-        latest_epoch = 0
-        while latest[i] != '_':
-            latest_epoch *= 10
-            latest_epoch += int(latest[i])
-            i -= 1
-
-        if latest_epoch < config['pretrain_epochs']:
-            start_epoch = latest_epoch + 1
-
-        print("Attempting to find existing checkpoint")
-        if os.path.exists(latest):
-            try:
-                pretrained_model_path = latest
-                model.load_state_dict(torch.load(latest))
-            except Exception as e:
-                print("Failed to load model from path: {latest}. Please check path and try again due to exception {e}.")
-                return
-
-    else:
-        utils.set_seed(seed_ltm)
-        summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time, main_folder=False)
-        writer = SummaryWriter(log_dir=summary_dir)
-        model = CLS(image_shape, config, device=device, writer=writer).to(device)
-
-        dataset = OmniglotAlphabet('./data', alphabet_name, False, writer_idx='any', download=True,
-                                   transform=image_tfms,
-                                   target_transform=None)
-
-        val_size = round(VAL_SPLIT * len(dataset))
-        train_size = len(dataset) - val_size
-
-        train_set, val_set = torch.utils.data.random_split(dataset, [train_size, val_size])
-
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['pretrain_batch_size'], shuffle=True)
-        val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['pretrain_batch_size'], shuffle=True)
-
-        # Pre-train the model
-        for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
-
-            for batch_idx, (data, target) in enumerate(train_loader):
-
-                if 0 < MAX_PRETRAIN_STEPS < batch_idx:
-                    print("Pretrain steps, {}, has exceeded max of {}.".format(batch_idx, MAX_PRETRAIN_STEPS))
-                    break
-
-                data = add_empty_character(data)  # An empty image is add to each character (an empty pair character)
-                labels = list(set(target))
-                target = torch.tensor([labels.index(value) for value in target])
-                data = data.to(device)
-                target = target.to(device)
-
-                losses, _ = model(data, labels=target if model.is_ltm_supervised() else None, mode='pretrain')
-                pretrain_loss = losses['ltm']['memory']['loss'].item()
-
-                if batch_idx % LOG_EVERY == 0:
-                    print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                        epoch, batch_idx, len(train_loader),
-                        100. * batch_idx / len(train_loader), pretrain_loss))
-
-                if batch_idx % VAL_EVERY == 0 or batch_idx == len(train_loader) - 1:
-                    logging.info("\t--- Start validation")
-
-                    with torch.no_grad():
-                        for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
-
-                            if batch_idx_val >= MAX_VAL_STEPS:
-                                print("\tval batch steps, {}, has exceeded max of {}.".format(batch_idx_val,
-                                                                                              MAX_VAL_STEPS))
-                                break
-                            val_data = add_empty_character(val_data)
-
-                            val_data = val_data.to(device)
-                            target = target.to(device)
-
-                            val_losses, _ = model(val_data, labels=val_target if model.is_ltm_supervised() else None,
-                                                  mode='validate')
-                            val_pretrain_loss = val_losses['ltm']['memory']['loss'].item()
-
-                            if batch_idx_val % LOG_EVERY == 0:
-                                print('\tValidation for Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                    epoch, batch_idx_val, len(val_loader),
-                                    100. * batch_idx_val / len(val_loader), val_pretrain_loss))
-
-            if epoch % SAVE_EVERY == 0:
-                pretrained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
-                print('Saving model to:', pretrained_model_path)
-                torch.save(model.state_dict(), pretrained_model_path)
-
+    contiguous_images = config.get('contiguous_images')
 
     for _ in range(seeds):
         seed = np.random.randint(1, 10000)
         utils.set_seed(seed)
 
+        # Pretraining
+        # ---------------------------------------------------------------------------
+        summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time, main_folder=False, seed=str(seed))
+        writer = SummaryWriter(log_dir=summary_dir)
+        if pretrained_model_path:
+            # summary_dir = pretrained_model_path
+             #writer = SummaryWriter(log_dir=summary_dir)
+            model = CLS(image_shape, config, device=device, writer=writer, output_shape=final_shape).to(device)
+
+            model_path = os.path.join(pretrained_model_path, 'pretrained_model_*')
+            print(model_path)
+            # Find the latest file in the directory
+            latest = max(glob.glob(model_path), key=os.path.getctime)
+
+            trained_model_path = latest
+            model.load_state_dict(torch.load(trained_model_path))
+
+        else:
+            start_epoch = 1
+            utils.set_seed(seed_ltm)
+            model = CLS(image_shape, config, device=device, writer=writer, output_shape=final_shape).to(device)
+
+            dataset = OmniglotAlphabet('./data', alphabet_name, False, writer_idx='any', download=True,
+                                       transform=image_tfms,
+                                       target_transform=None)
+
+            val_size = round(VAL_SPLIT * len(dataset))
+            train_size = len(dataset) - val_size
+
+            train_set, val_set = torch.utils.data.random_split(dataset, [train_size, val_size])
+
+            train_loader = torch.utils.data.DataLoader(train_set, batch_size=config['pretrain_batch_size'], shuffle=True)
+            val_loader = torch.utils.data.DataLoader(val_set, batch_size=config['pretrain_batch_size'], shuffle=True)
+
+            # Pre-train the model
+            for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
+
+                for batch_idx, (data, target) in enumerate(train_loader):
+
+                    if 0 < MAX_PRETRAIN_STEPS < batch_idx:
+                        print("Pretrain steps, {}, has exceeded max of {}.".format(batch_idx, MAX_PRETRAIN_STEPS))
+                        break
+                    labels = list(set(target))
+                    target = torch.tensor([labels.index(value) for value in target])
+
+                    if contiguous_images:
+                        data_mirror = data
+                        data = add_empty_character(data)  # An empty image is add to each character (an empty pair character)
+                        data_mirror = add_empty_character(data_mirror, mirror=True, double=True)
+                        data = torch.cat((data, data_mirror))
+                        target = torch.cat((target, target+len(target)))
+
+                    data = data.to(device)
+                    target = target.to(device)
+
+                    losses, _ = model(data, labels=target if model.is_ltm_supervised() else None, mode='pretrain')
+                    pretrain_loss = losses['ltm']['memory']['loss'].item()
+
+                    if batch_idx % LOG_EVERY == 0:
+                        print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                            epoch, batch_idx, len(train_loader),
+                            100. * batch_idx / len(train_loader), pretrain_loss))
+
+                    if batch_idx % VAL_EVERY == 0 or batch_idx == len(train_loader) - 1:
+                        logging.info("\t--- Start validation")
+
+                        with torch.no_grad():
+                            for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
+
+                                if batch_idx_val >= MAX_VAL_STEPS:
+                                    print("\tval batch steps, {}, has exceeded max of {}.".format(batch_idx_val,
+                                                                                                  MAX_VAL_STEPS))
+                                    break
+
+                                if contiguous_images:
+                                    val_data = add_empty_character(val_data)
+
+                                val_data = val_data.to(device)
+                                target = target.to(device)
+
+                                val_losses, _ = model(val_data, labels=val_target if model.is_ltm_supervised() else None,
+                                                      mode='validate')
+                                val_pretrain_loss = val_losses['ltm']['memory']['loss'].item()
+
+                                if batch_idx_val % LOG_EVERY == 0:
+                                    print('\tValidation for Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                        epoch, batch_idx_val, len(val_loader),
+                                        100. * batch_idx_val / len(val_loader), val_pretrain_loss))
+
+                if epoch % SAVE_EVERY == 0:
+                    trained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
+                    print('Saving model to:', trained_model_path)
+                    torch.save(model.state_dict(), trained_model_path)
+                pretrained_model_path = summary_dir
+
         # Load the pretrained model
-        model = CLS(image_shape, config, device=device, writer=writer).to(device)
-        model.load_state_dict(torch.load(pretrained_model_path))
+        #summary_dir_seed = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time, main_folder=False)
+        #writer = SummaryWriter(log_dir=summary_dir)
+        # model = CLS(image_shape, config, device=device, writer=writer).to(device)
+        # model.load_state_dict(torch.load(pretrained_model_path))
 
         # Study and Recall
         # ---------------------------------------------------------------------------
@@ -215,8 +208,8 @@ def main():
                 sequence_study = SequenceGeneratorGraph(characters, length, learning_type, communities)
                 sequence_recall = SequenceGeneratorGraph(characters, length, learning_type, communities)
             elif experiment == "associative_inference":
-                sequence_study = SequenceGeneratorTriads(characters, length, learning_type)
-                sequence_recall = SequenceGeneratorTriads(characters, length, learning_type)
+                sequence_study = SequenceGeneratorTriads(characters, length, learning_type, batch_size)
+                sequence_recall = SequenceGeneratorTriads(characters, length, learning_type,batch_size)
 
 
             sequence_study_tensor = torch.FloatTensor(sequence_study.sequence)
@@ -237,15 +230,19 @@ def main():
                                                transform=image_tfms, target_transform=None)
 
             labels_study = sequence_study.core_label_sequence
-            main_pairs, _ = convert_sequence_to_images(alphabet, alphabet, labels_study, labels_study)
+            main_pairs, _ = convert_sequence_to_images(alphabet=alphabet, sequence=labels_study, element='both',
+                                                       main_labels=labels_study, second_alphabet=alphabet)
             main_pairs_flat = torch.flatten(main_pairs, start_dim=1)
             single_characters_original = [alphabet_recall[a][0] for a in range(0, characters)]
-            single_characters = add_empty_character(single_characters_original)
-            if mirror:
-                single_characters_mirror = add_empty_character(single_characters_original, mirror)
-                single_characters = torch.cat((single_characters, single_characters_mirror), 0)
-                characters = characters*2
-
+            if contiguous_images:
+                single_characters = add_empty_character(single_characters_original)
+                if mirror:
+                    single_characters_mirror = add_empty_character(single_characters_original, mirror)
+                    single_characters = torch.cat((single_characters, single_characters_mirror), 0)
+                    characters = characters*2
+            else:
+                single_characters = single_characters_original
+                single_characters = torch.stack(single_characters)
             # Initialise metrics
             oneshot_metrics = OneshotMetrics()
 
@@ -258,8 +255,29 @@ def main():
 
 
             for idx, (study_set, recall_set) in pair_sequence_dataset:
-                study_data, study_target = convert_sequence_to_images(alphabet, alphabet_blur, study_set, labels_study)
-                study_target = torch.tensor(study_target, dtype=torch.long, device=device)
+
+
+                study_paired_data, study_paired_target = convert_sequence_to_images(alphabet=alphabet, second_alphabet=alphabet,
+                                                                       sequence=study_set, element='both',
+                                                                        main_labels=labels_study)
+                if contiguous_images:
+                    study_data, study_target = convert_sequence_to_images(alphabet=alphabet,
+                                                                                        second_alphabet=alphabet_blur,
+                                                                                        sequence=study_set,
+                                                                                        element='both',
+                                                                                        main_labels=labels_study)
+                    study_target = torch.tensor(study_target, dtype=torch.long, device=device)
+                else:
+                    study_data_A, study_target = convert_sequence_to_images(alphabet=alphabet_blur,
+                                                                              sequence=study_set, element='first',
+                                                                              main_labels=labels_study)
+                    study_target = torch.tensor(study_target, dtype=torch.long, device=device)
+                    study_data_B, _ = convert_sequence_to_images(alphabet=alphabet,
+                                                                              sequence=study_set, element='second',
+                                                                              main_labels=labels_study)
+                    _, study_data_A = model(study_data_A, study_target, mode='validate')
+                    _, study_data_B = model(study_data_B, study_target, mode='validate')
+                    study_data = study_data_A['ltm']['memory']['output'].detach() + study_data_B['ltm']['memory']['output'].detach()
 
                 study_data = study_data.to(device)
                 study_target = study_target.to(device)
@@ -270,11 +288,34 @@ def main():
                     recall_target = list(range(single_characters.size()[0]))
                     recall_target = recall_target * -(-batch_size//characters)
                     del recall_target[batch_size:len(recall_target)]
+                    recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
+                    if not contiguous_images:
+                        _, recall_data = model(recall_data, recall_target, mode='validate')
+                        recall_data = recall_data['ltm']['memory']['output'].detach()
                 else:
-                    recall_data, recall_target = convert_sequence_to_images(alphabet_recall, alphabet_recall, recall_set, labels_study,
+
+                    recall_paired_data, recall_paired_target = convert_sequence_to_images(alphabet=alphabet_recall,
+                                                                            second_alphabet=alphabet_recall,
+                                                                            sequence=recall_set,
+                                                                            main_labels=labels_study,
                                                                             delete_first=True, num_delete=characters)
-                    recall_data = torch.cat((single_characters, recall_data), 0)
-                    recall_target = list(range(max(recall_target) + 1, max(recall_target) + 1 + characters)) + recall_target
+                    recall_paired_data = torch.cat((single_characters, recall_paired_data), 0)
+                    recall_paired_target = list(range(max(recall_paired_target) + 1, max(recall_paired_target) + 1 + characters)) + recall_paired_target
+                    if contiguous_images:
+                        recall_data = recall_paired_data
+                        recall_target = recall_paired_target
+                    else:
+                        recall_data_A, recall_target = convert_sequence_to_images(alphabet=alphabet_recall,
+                                                                                sequence=recall_set, element='first',
+                                                                                main_labels=labels_study)
+                        recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
+                        recall_data_B, _ = convert_sequence_to_images(alphabet=alphabet_recall,
+                                                                     sequence=recall_set, element='second',
+                                                                     main_labels=labels_study)
+                        _, recall_data_A = model(recall_data_A, recall_target, mode='validate')
+                        _, recall_data_B = model(recall_data_B, recall_target, mode='validate')
+                        recall_data = recall_data_A['ltm']['memory']['output'].detach() + recall_data_B['ltm']['memory'][
+                            'output'].detach()
 
                 recall_data = recall_data.to(device)
                 recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
@@ -286,21 +327,30 @@ def main():
                 # Study
                 # --------------------------------------------------------------------------
                 for step in range(config['settled_response_steps']):
-                    study_train_losses, _ = model(study_data, study_target, mode='study')
-                    study_train_loss = study_train_losses['stm']['memory']['loss']
+
+                    if contiguous_images:
+                        study_train_losses, _ = model(study_data, study_target, mode='study')
+                        study_train_loss = study_train_losses['stm']['memory']['loss']
+                    else:
+                        study_train_losses, _ = model(study_data, study_target, mode='study', ec_inputs=study_data,
+                                                      paired_inputs=study_paired_data)
+                        study_train_loss = study_train_losses['stm']['memory']['loss']
 
                     print('Losses batch {}, ite {}: \t PR:{:.6f}\
                         PR mismatch: {:.6f} \t ca3_ca1: {:.6f}'.format(idx, step,
                                                                      study_train_loss['pr'].item(),
                                                                      study_train_loss['pr_mismatch'].item(),
                                                                      study_train_loss['ca3_ca1'].item()))
-                    model(recall_data, recall_target, mode='study_validate')
 
                     if step == (config['initial_response_step']-1) or step == (config['settled_response_steps']-1):
                         with torch.no_grad():
-                            _, recall_outputs = model(recall_data, recall_target, mode='recall')
+                            _, recall_outputs = model(recall_data, recall_target, mode='recall', ec_inputs=recall_data,
+                                                      paired_inputs=study_paired_data)
                             cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
                             for component in components:
+                                #if component == 'ltm':
+                                #    recall_outputs_flat = torch.flatten(recall_outputs["ltm"]["memory"]["decoding"],
+                                #                                        start_dim=1)
                                 if component == 'dg':
                                     recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component],
                                                                     start_dim=1)
@@ -420,12 +470,12 @@ def main():
                 tag = ''
 
             for a in pearson_r_initial.keys():
-                with open(main_summary_dir + '/pearson_initial_' + a + str(stm_epoch) + '_'+ str(seed) + tag + '.csv', 'w', encoding='UTF8') as f:
+                with open(main_summary_dir + '/pearson_initial_' + a + '_' + str(stm_epoch) + '_'+ str(seed) + tag + '.csv', 'w', encoding='UTF8') as f:
                     writer_file = csv.writer(f)
                     writer_file.writerows(pearson_r_initial[a].numpy())
 
             for a in pearson_r_settled.keys():
-                with open(main_summary_dir + '/pearson_settled_' + a + str(stm_epoch) + '_'+ str(seed) + tag + '.csv', 'w', encoding='UTF8') as f:
+                with open(main_summary_dir + '/pearson_settled_' + a + '_' + str(stm_epoch) + '_' + str(seed) + tag + '.csv', 'w', encoding='UTF8') as f:
                     writer_file = csv.writer(f)
                     writer_file.writerows(pearson_r_settled[a].numpy())
 
@@ -440,23 +490,33 @@ def main():
     #     heatmap_settled.create_heatmap()
 
 
-def add_empty_character(images, mirror=False):
+def add_empty_character(images, mirror=False, double=False):
     if mirror:
         data = [torch.cat((torch.zeros(1, 52, 52), a), 2) for a in images]
         data = torch.stack(data)
     else:
         data = [torch.cat((a, torch.zeros(1, 52, 52)), 2) for a in images]
         data = torch.stack(data)
+    if double:
+        data_double = [torch.cat((a, a), 2) for a in images]
+        data_double = torch.stack(data_double)
+        data = torch.cat((data, data_double))
     return data
 
 
-def convert_sequence_to_images(alphabet, alphabet_blur, sequence, main_labels, delete_first=False, num_delete=0):
-    pairs_images = [torch.cat((alphabet_blur[int(a[0])][0], alphabet[int(a[1])][0]), 2) for a in sequence]
+def convert_sequence_to_images(alphabet, sequence, main_labels, element='first', second_alphabet=None,
+                               delete_first=False, num_delete=0):
+    if element == 'both':
+        pairs_images = [torch.cat((second_alphabet[int(a[0])][0], alphabet[int(a[1])][0]), 2) for a in sequence]
+    if element == 'first':
+        pairs_images = [alphabet[int(a[0])][0] for a in sequence]
+    if element == 'second':
+        pairs_images = [alphabet[int(a[1])][0] for a in sequence]
+    labels = [(alphabet[int(a[0])][1], alphabet[int(a[1])][1]) for a in sequence]
+    labels = [main_labels.index(value) for value in labels]
     if delete_first:
         del pairs_images[0:num_delete]
     pairs_images = torch.stack(pairs_images, 0)
-    labels = [(alphabet[int(a[0])][1], alphabet[int(a[1])][1]) for a in sequence]
-    labels = [main_labels.index(value) for value in labels]
     if delete_first:
         del labels[0:num_delete]
     return pairs_images, labels
