@@ -26,6 +26,7 @@ class HeatmapPlotter:
                 data = torch.FloatTensor(data)
             li.append(data)
         li = torch.stack(li)
+        print(response[0])
         if 'mirror' in response[0]:
             mirror = True
         else:
@@ -42,12 +43,12 @@ class HeatmapPlotter:
             second_letters = ["*" + a for a in letters]
             labels = first_letters + second_letters
         else:
-            letters = [list(string.ascii_uppercase)[a] for a in range(list(data.size())[1])]
-            labels = [a + "*" for a in letters]
+            labels = [list(string.ascii_uppercase)[a] for a in range(list(data.size())[1])]
         plt.figure()
         ax = plt.axes()
         r_heatmap = sns.heatmap(data_mean, xticklabels=labels, yticklabels=labels, cmap="RdYlBu_r",
-                                vmin=-0.1, vmax=1, ax=ax)
+                               # vmin=-0.1, vmax=1, ax=ax)
+                                ax=ax)
         ax.set_title(self.component)
         figure = r_heatmap.get_figure()
         figure.savefig(os.path.join(self.path, self.component + '.png'), dpi=300)
@@ -125,3 +126,9 @@ class LinePlotter:
                                      palette=['black', 'green', 'dimgrey', 'yellow', 'silver'])
             figure = line_plot.get_figure()
             figure.savefig(os.path.join(self.path, self.component + '.png'), dpi=300)
+
+for a in ["dg", "ca3", "pr", "ca3_ca1", "ca1", "final"]:
+    heatmap_initial = HeatmapPlotter("/Users/karinaislas/PycharmProjects/pt-aha/lake/runs/associative_inference/recurrence/20211126-153142/predictions", "pearson_initial_" + a)
+    heatmap_settled = HeatmapPlotter("/Users/karinaislas/PycharmProjects/pt-aha/lake/runs/associative_inference/recurrence/20211126-153142/predictions", "pearson_settled_" + a)
+    heatmap_initial.create_heatmap()
+

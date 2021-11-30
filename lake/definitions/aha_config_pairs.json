@@ -1,15 +1,18 @@
 {
-  "seeds": 10,
+  "pretrained_model_path": "./runs/pairs_structure/statistical/20211124-202214/8765",
+  "seeds": 2,
+  "train_epochs": 5,
   "experiment_name": "associative_inference",
-  "learning_type": "static",
+  "learning_type": "recurrence",
   "communities": 3,
   "test_single_characters": true,
-  "test_mirror_characters": true,
+  "test_mirror_characters": false,
+  "activation": true,
 
   "characters": 9,
-  "sequence_length": 600,
-  "study_batch_size": 60,
-  "settled_response_steps": 50,
+  "sequence_length": 72,
+  "study_batch_size": 24,
+  "settled_response_steps": 100,
   "initial_response_step": 20,
 
   "alphabet": "Latin",
@@ -20,10 +23,12 @@
   "pretrain_epochs": 5,
   "pretrain_batch_size": 150,
   "image_resize_factor": 0.5,
-  "image_shape": [1, 1, 52, 104],
+  "image_shape": [1, 1, 52, 52],
+  "pairs_shape": [1, 1, 52, 104],
+  "contiguous_images": false,
 
 
-  "test_stm_components": ["dg", "ca3", "pr", "pm_ec", "final"],
+  "test_components": ["dg", "ca3", "pr", "ca3_ca1", "ca1", "final"],
 
   "ltm_type": "vc",
   "stm_type": "aha",
@@ -36,7 +41,17 @@
     "secondary_label_names": ["recall.labels", "study.labels", "recall.labels", "study.labels"],
     "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
   },
+  "decoder": {
+    "learning_rate": 0.01,
+    "weight_decay": 0.00004,
 
+    "input_dropout": 0.25,
+
+    "num_layers": 1,
+    "units": [800],
+
+    "norm_inputs": true
+  },
   "ltm": {
     "learning_rate": 0.001,
 
@@ -74,7 +89,7 @@
     }
   },
   "stm": {
-    "msp_type": "pm",
+    "msp_type": "ca1",
     "hebbian_perforant": false,
 
     "dg": {
@@ -130,7 +145,8 @@
         "use_bias": true,
         "norm_inputs": true
     },
-    "pm": {
+    "msp": {
+      "ca3_ca1": {
         "learning_rate": 0.01,
         "weight_decay": 0.00004,
 
@@ -142,14 +158,22 @@
         "decoder_nonlinearity": "leaky_relu",
         "use_bias": true,
         "norm_inputs": true
-    },
-    "classifier": {
-        "learning_rate": 0.01,
-        "weight_decay": 0.000025,
-        "input_dropout": 0.0,
-        "hidden_dropout": [],
-        "hidden_units": [800],
-        "output_units": 90
+      },
+      "ca1": {
+          "learning_rate": 0.001,
+          "weight_decay": 0.00004,
+
+          "num_units": 800,
+          "input_dropout": 0.0,
+          "hidden_dropout": 0.0,
+
+          "encoder_nonlinearity": "leaky_relu",
+          "decoder_nonlinearity": "none",
+          "use_bias": true,
+          "norm_inputs": true,
+
+          "ca3_recall": true
       }
+    }
   }
 }
