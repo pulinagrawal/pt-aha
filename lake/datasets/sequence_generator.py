@@ -19,9 +19,11 @@ be CD. """
         self.characters = characters
         self.length = seq_length
         self.type = type
+        self.all_pairs = [(a, b) for a in range(0, self.characters) for b in range(0, self.characters)]
         self.core_sequence = self._create_core_sequence()
         self.core_label_sequence = self._create_label_sequence()
         self.sequence = self._create_sequence()
+        self.test_sequence = self._create_test_sequence()
 
     def _create_core_sequence(self):
         if self.characters % 2 != 0:
@@ -68,6 +70,12 @@ be CD. """
 
         return seq
 
+    def _create_test_sequence(self):
+        test_seq = [a for a in self.all_pairs if a not in self.core_sequence]
+        identical = [(a, a) for a in range(0, self.characters)]
+        test_seq = [a for a in test_seq if a not in identical]
+        return test_seq
+
 
 class SequenceGeneratorGraph:
 
@@ -100,6 +108,7 @@ class SequenceGeneratorGraph:
         if self.type == "static":
             seq = self.core_label_sequence
             seq = seq*int(self.length / len(seq))
+            shuffle(seq)
             return seq
         elif self.type == "random":
             walk = list(islice(self._random_walk(), self.length))
@@ -139,12 +148,12 @@ class SequenceGeneratorTriads:
 
     def _create_sequence(self):
         if self.type == 'recurrence':
-            tmp= self.core_label_sequence*(self.sub_length//len(self.core_label_sequence))
+            tmp = self.core_label_sequence*(self.sub_length//len(self.core_label_sequence))
             shuffle(tmp)
-            seq = tmp
+            seq = tmp.copy()
             for _ in range(0, int(self.length / len(seq)) - 1):
                 shuffle(tmp)
-                seq = seq + tmp
+                seq.extend(tmp)
             return seq
         elif self.type == 'static':
             seq = self.core_label_sequence
@@ -156,3 +165,5 @@ class SequenceGeneratorTriads:
             return seq
         else:
             raise NotImplementedError('Learning type must be recurrence or static in associative experiments')
+
+
