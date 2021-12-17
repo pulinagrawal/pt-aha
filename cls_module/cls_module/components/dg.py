@@ -135,6 +135,24 @@ class DG(nn.Module):
 
     return batch_overlap
 
+  def compute_unique_overlap(self, inputs, encoding):
+    """ a, b = (0,1)
+    Overlap is where tensors have 1's in the same position.
+    Return number of bits that overlap """
+
+    unique_samples = torch.unique(inputs, dim=0)
+    print('==== Found', unique_samples.shape[0], 'uniques out of', inputs.shape[0], 'samples')
+
+    uniuqe_idxs = torch.zeros(unique_samples.shape[0], dtype=torch.long)
+    for i, sample in enumerate(unique_samples):
+      idx = (sample == inputs).all(1).nonzero(as_tuple=True)
+      uniuqe_idxs[i] = idx[0][0]
+
+    unique_encoding = encoding[uniuqe_idxs]
+    unique_overlap = self.compute_overlap(unique_encoding)
+
+    return unique_overlap
+
   def forward(self, inputs):  # pylint: disable=arguments-differ
     inputs = torch.flatten(inputs, start_dim=1)
 
