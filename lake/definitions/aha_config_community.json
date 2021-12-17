@@ -1,12 +1,12 @@
 {
   "pretrained_model_path": "./runs/associative_inference/recurrence/20211202-165246/8377",
 
-  "experiment_name": "pairs_structure",
-  "learning_type": "episodic",
+  "experiment_name": "community_structure",
+  "learning_type": "static",
   "communities": 3,
-  "characters": 8,
-  "sequence_length": 90,
-  "study_batch_size": 90,
+  "characters": 15,
+  "sequence_length": 60,
+  "study_batch_size": 60,
 
   "seeds": 5,
   "train_epochs": 5,
