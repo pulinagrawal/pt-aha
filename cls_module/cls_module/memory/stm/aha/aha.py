@@ -123,6 +123,9 @@ class AHA(MemoryInterface):
     overlap = self.dg.compute_overlap(outputs['dg'])
     losses['dg_overlap'] = overlap.sum()
 
+    unique_overlap = self.dg.compute_unique_overlap(normed_inputs, outputs['dg'])
+    losses['dg_unique_overlap'] = unique_overlap.sum()
+
     # Perforant Pathway: Hebbian Learning
     if self.is_hebbian_perforant():
       ca3_cue, losses['dg_ca3'], losses['ec_ca3'], losses['ca3_cue'] = self.perforant(ec_inputs=normed_inputs, dg_inputs=outputs['dg'])
