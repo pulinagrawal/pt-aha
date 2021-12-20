@@ -130,8 +130,8 @@ class SequenceGeneratorTriads:
     def __init__(self, characters, seq_length, type, batch_size):
         self.characters = characters
         self.length = seq_length
-        self.sub_length = batch_size
         self.type = type
+        self.sub_length = batch_size
         self.all_pairs = [(a, b) for a in range(0, self.characters) for b in range(0, self.characters)]
         self.core_label_sequence = self._create_label_sequence()
         self.sequence = self._create_sequence()
