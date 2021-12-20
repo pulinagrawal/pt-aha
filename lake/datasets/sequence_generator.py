@@ -132,8 +132,11 @@ class SequenceGeneratorTriads:
         self.length = seq_length
         self.sub_length = batch_size
         self.type = type
+        self.all_pairs = [(a, b) for a in range(0, self.characters) for b in range(0, self.characters)]
         self.core_label_sequence = self._create_label_sequence()
         self.sequence = self._create_sequence()
+        self.core_sequence = self.core_label_sequence
+        self.test_sequence = self._create_test_sequence()
 
 
     def _create_label_sequence(self):
@@ -166,4 +169,9 @@ class SequenceGeneratorTriads:
         else:
             raise NotImplementedError('Learning type must be recurrence or static in associative experiments')
 
+    def _create_test_sequence(self):
+        test_seq = [a for a in self.all_pairs if a not in self.core_sequence]
+        identical = [(a, a) for a in range(0, self.characters)]
+        test_seq = [a for a in test_seq if a not in identical]
+        return test_seq
 
