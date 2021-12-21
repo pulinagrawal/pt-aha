@@ -29,7 +29,7 @@ VAL_SPLIT = 0.175
 
 def main():
     parser = argparse.ArgumentParser(description='Pair structure. Replicate of Schapiro')
-    parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_pairs.json',
+    parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_Schapiro_hebb.json',
                         help='Configuration file for experiments.')
     parser.add_argument('-l', '--logging', nargs="?", type=str, default='warning',
                         help='Logging level.')
@@ -71,6 +71,9 @@ def main():
     final_shape = config['pairs_shape']
     alphabet_name = config.get('alphabet')
     pretrained_model_path = config.get('pretrained_model_path', None)
+    pearson_r_test = torch.zeros((1, 2))
+    pearson_r_test = pearson_r_test[None, :, :]
+    pearson_r_test = {k: pearson_r_test for k in components}
 
     for _ in range(seeds):
         seed = np.random.randint(1, 10000)
@@ -197,9 +200,6 @@ def main():
         pearson_r_tensor = torch.zeros((characters, characters))
         pearson_r_tensor = pearson_r_tensor[None, :, :]
         pearson_r_tensor = {k: pearson_r_tensor for k in components}
-        pearson_r_test = torch.zeros((1, 2))
-        pearson_r_test = pearson_r_test[None, :, :]
-        pearson_r_test = {k: pearson_r_test for k in components}
 
 
         for stm_epoch in range(config['train_epochs']):
@@ -295,11 +295,16 @@ def main():
                                                       paired_inputs=study_paired_data)
                     study_train_loss = study_train_losses['stm']['memory']['loss']
 
-                    print('Losses batch {}, ite {}: \t PR:{:.6f}\
-                        PR mismatch: {:.6f} \t ca3_ca1: {:.6f}'.format(idx, step,
-                                                                     study_train_loss['pr'].item(),
-                                                                     study_train_loss['pr_mismatch'].item(),
-                                                                     study_train_loss['ca3_ca1'].item()))
+                    # print('Losses batch {}, ite {}: \t PR:{:.6f}\
+                    #    PR mismatch: {:.6f} \t ca3_ca1: {:.6f}'.format(idx, step,
+                    #                                                 study_train_loss['pr'].item(),
+                    #                                                 study_train_loss['pr_mismatch'].item(),
+                    #                                                 study_train_loss['ca3_ca1'].item()))
+
+                    print('Losses batch {}, ite {}: \t EC_CA3:{:.6f}\
+                          \t ca3_ca1: {:.6f}'.format(idx, step,study_train_loss['ec_ca3'].item(),
+                                                                      #study_train_loss['pr_mismatch'].item(),
+                                                                      study_train_loss['ca3_ca1'].item()))
 
                     if step == (config['initial_response_step']-1) or step == (config['settled_response_steps']-1):
                         with torch.no_grad():
@@ -316,6 +321,9 @@ def main():
                                 if component == 'pr':
                                     recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['pr_out'],
                                                                         start_dim=1)
+                                if component == 'ec_ca3':
+                                    recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['ca3_cue'],
+                                            start_dim=1)
                                 if component == 'ca3':
                                     recall_outputs_flat = torch.flatten(
                                         recall_outputs["stm"]["memory"][component],
@@ -343,6 +351,7 @@ def main():
                                 pearson_r_test[component] = torch.cat(
                                     (pearson_r_test[component], tmp_pearson_test[None, :, :]), 0)
 
+                pairs_inputs.extend([[(int(a[0]), int(a[1])) for a in study_set]])
 
                 # Recall
                 # --------------------------------------------------------------------------
@@ -369,29 +378,29 @@ def main():
                                                     comparison_type=comparison_type)
 
                     # PR Accuracy (study first) - this is the version used in the paper
-                    oneshot_metrics.compare(prefix='pr_sf_',
-                                            primary_features=model.features['study']['stm_pr'],
-                                            primary_labels=model.features['study']['labels'],
-                                            secondary_features=model.features['recall']['stm_pr'],
-                                            secondary_labels=model.features['recall']['labels'],
-                                            comparison_type='match_mse')
-
-                    # oneshot_metrics.compare(prefix='pr_rf_',
-                    #                         primary_features=model.features['recall']['stm_pr'],
-                    #                         primary_labels=model.features['recall']['labels'],
-                    #                         secondary_features=model.features['study']['stm_pr'],
-                    #                         secondary_labels=model.features['study']['labels'],
+                    # oneshot_metrics.compare(prefix='pr_sf_',
+                    #                         primary_features=model.features['study']['stm_pr'],
+                    #                         primary_labels=model.features['study']['labels'],
+                    #                         secondary_features=model.features['recall']['stm_pr'],
+                    #                         secondary_labels=model.features['recall']['labels'],
                     #                         comparison_type='match_mse')
+
+                    oneshot_metrics.compare(prefix='pr_rf_',
+                                             primary_features=model.features['recall']['stm_ca3'],
+                                             primary_labels=model.features['recall']['labels'],
+                                             secondary_features=model.features['study']['stm_ca3'],
+                                             secondary_labels=model.features['study']['labels'],
+                                             comparison_type='match_mse')
 
                     oneshot_metrics.report()
 
                     summary_names = [
                         'study_inputs',
-                        'study_stm_pr',
+                       # 'study_stm_pr',
                         'study_stm_ca3',
 
                         'recall_inputs',
-                        'recall_stm_pr',
+                       # 'recall_stm_pr',
                         'recall_stm_ca3',
                         'recall_stm_recon'
                     ]
@@ -413,17 +422,13 @@ def main():
                     utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
 
 # Save results
-        predictions_initial = predictions[0:config['settled_response_steps']:2]
-        predictions_settled = predictions[1:config['settled_response_steps']:2]
-        pearson_r_initial = {a: pearson_r_tensor[a][1:config['settled_response_steps']:2] for a in pearson_r_tensor}
-        pearson_r_settled = {a: pearson_r_tensor[a][2:config['settled_response_steps']+1:2] for a in pearson_r_tensor}
+        predictions_initial = predictions[0:predictions.__len__():2]
+        predictions_settled = predictions[1:predictions.__len__():2]
+        pearson_r_initial = {a: pearson_r_tensor[a][1:pearson_r_tensor[a].shape[0]:2] for a in pearson_r_tensor}
+        pearson_r_settled = {a: pearson_r_tensor[a][2:pearson_r_tensor[a].shape[0]+1:2] for a in pearson_r_tensor}
         pearson_r_initial = {a: torch.mean(pearson_r_initial[a], 0) for a in pearson_r_initial}
         pearson_r_settled = {a: torch.mean(pearson_r_settled[a], 0) for a in pearson_r_settled}
-        pearson_r_initial_test = {a: pearson_r_test[a][1:config['settled_response_steps']:2] for a in pearson_r_test}
-        pearson_r_settled_test = {a: pearson_r_test[a][2:config['settled_response_steps'] + 1:2] for a in
-                                 pearson_r_test}
-        pearson_r_initial_test = {a: torch.mean(pearson_r_initial_test[a], 0) for a in pearson_r_initial_test}
-        pearson_r_settled_test = {a: torch.mean(pearson_r_settled_test[a], 0) for a in pearson_r_settled_test}
+
 
         with open(main_summary_dir + '/predictions_initial'+ str(stm_epoch) + '_'+ str(seed) + '.csv', 'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
@@ -448,20 +453,30 @@ def main():
                 writer_file = csv.writer(f)
                 writer_file.writerows(pearson_r_settled[a].numpy())
 
-        for a in pearson_r_initial_test.keys():
-            with open(main_summary_dir + '/pearson_initial_test_' + a + '_' + str(stm_epoch) + '_'+ str(seed) +  '.csv', 'w', encoding='UTF8') as f:
-                writer_file = csv.writer(f)
-                writer_file.writerows(pearson_r_initial_test[a].numpy())
-
-        for a in pearson_r_settled_test.keys():
-            with open(main_summary_dir + '/pearson_settled_test_' + a + '_' + str(stm_epoch) + '_' + str(seed) +  '.csv', 'w', encoding='UTF8') as f:
-                writer_file = csv.writer(f)
-                writer_file.writerows(pearson_r_settled_test[a].numpy())
-
         oneshot_metrics.report_averages()
         writer.flush()
         writer.close()
 
+    pearson_r_initial_test = {a: pearson_r_test[a][1:pearson_r_test[a].shape[0]:2] for a in pearson_r_test}
+    pearson_r_settled_test = {a: pearson_r_test[a][2:pearson_r_test[a].shape[0] + 1:2] for a in
+                                 pearson_r_test}
+
+    #pearson_r_initial_test = {a: torch.cat((torch.mean(pearson_r_initial_test[a], 0), torch.div(torch.std(pearson_r_initial_test[a],0),
+                                                                                 #     np.sqrt(pearson_r_initial_test[a].shape[0]))), 1) for a in pearson_r_initial_test}
+    #pearson_r_settled_test = {a: torch.cat((torch.mean(pearson_r_settled_test[a], 0), torch.div(torch.std(pearson_r_settled_test[a],0),
+                                                                                  #    np.sqrt(pearson_r_settled_test[a].shape[0]))), 1) for a in pearson_r_settled_test}
+
+    for a in pearson_r_initial_test.keys():
+        with open(main_summary_dir + '/pearson_initial_test_' + a + '.csv',
+                  'w', encoding='UTF8') as f:
+            writer_file = csv.writer(f)
+            writer_file.writerows(pearson_r_initial_test[a].numpy())
+
+    for a in pearson_r_settled_test.keys():
+        with open(main_summary_dir + '/pearson_settled_test_' + a + '.csv',
+                  'w', encoding='UTF8') as f:
+            writer_file = csv.writer(f)
+            writer_file.writerows(pearson_r_settled_test[a].numpy())
 
 def convert_sequence_to_images(alphabet, sequence, main_labels, element='first', second_alphabet=None):
     if element == 'both':

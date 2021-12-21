@@ -8,7 +8,7 @@
   "sequence_length": 90,
   "study_batch_size": 90,
 
-  "seeds": 5,
+  "seeds": 2,
   "train_epochs": 5,
   "test_single_characters": true,
   "activation_coefficient": 0.9,
