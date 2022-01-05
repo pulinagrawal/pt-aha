@@ -13,7 +13,7 @@
   "settled_response_steps": 200,
   "initial_response_step": 20,
 
-  "alphabet": "Greek",
+  "alphabet": "Latin",
   "variation": false,
   "variation_training": false,
   "character_idx_study": 0,
