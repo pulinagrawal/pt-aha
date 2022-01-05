@@ -76,18 +76,7 @@
 
     "output_pool_size": 4,
     "output_pool_stride": 4,
-    "output_norm_per_sample": true,
-
-    "classifier": {
-      "learning_rate": 0.001,
-      "weight_decay": 0.000025,
-
-      "input_dropout": 0.0,
-      "hidden_dropout": [],
-
-      "hidden_units": [],
-      "output_units": 90
-    }
+    "output_norm_per_sample": true
   },
   "stm": {
     "msp_type": "ca1",
@@ -99,26 +88,14 @@
         "init_scale": 10.0,
         "num_units": 225,
         "sparsity": 10,
-        "use_stub": false
+        "use_stub": false,
+        "unique_mode": true
     },
     "ca3": {
         "shift_range": false
     },
     "perforant_hebb": {
         "learning_rate": 0.01
-    },
-    "pm_ec": {
-        "learning_rate": 0.01,
-        "weight_decay": 0.00004,
-
-        "num_units": 100,
-        "input_dropout": 0.0,
-        "hidden_dropout": 0.0,
-
-        "encoder_nonlinearity": "leaky_relu",
-        "decoder_nonlinearity": "leaky_relu",
-        "use_bias": true,
-        "norm_inputs": true
     },
     "msp": {
       "ca3_ca1": {

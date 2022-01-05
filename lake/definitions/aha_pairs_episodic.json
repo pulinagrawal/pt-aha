@@ -93,7 +93,7 @@
       "filters": 121,
       "kernel_size": 10,
       "stride": 5,
-      "eval_stride": 1,
+      "eval_stride": 5,
       "encoder_padding": "same",
       "decoder_padding": "same",
       "encoder_nonlinearity": "none",
@@ -116,7 +116,8 @@
           "init_scale": 10.0,
           "num_units": 225,
           "sparsity": 10,
-          "use_stub": false
+          "use_stub": false,
+          "unique_mode": true
       },
       "ca3": {
           "shift_range": false
