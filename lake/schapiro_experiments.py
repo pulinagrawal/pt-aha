@@ -108,7 +108,11 @@ def main():
             latest = max(glob.glob(model_path), key=os.path.getctime)
 
             trained_model_path = latest
-            model.load_state_dict(torch.load(trained_model_path))
+
+            # Load only the LTM part
+            pretrained_dict = torch.load(trained_model_path)
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k.startswith('ltm')}
+            model.load_state_dict(pretrained_dict)
 
         else:
             start_epoch = 1
@@ -179,12 +183,6 @@ def main():
                     torch.save(model.state_dict(), trained_model_path)
                 pretrained_model_path = summary_dir
 
-        # Load the pretrained model
-        #summary_dir_seed = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time, main_folder=False)
-        #writer = SummaryWriter(log_dir=summary_dir)
-        # model = CLS(image_shape, config, device=device, writer=writer).to(device)
-        # model.load_state_dict(torch.load(pretrained_model_path))
-
         # Study and Recall
         # ---------------------------------------------------------------------------
         print('-------- Few-shot Evaluation (Study and Recall) ---------')
@@ -239,12 +237,11 @@ def main():
             main_pairs_flat = torch.flatten(main_pairs, start_dim=1)
             single_characters = [alphabet_recall[a][0] for a in range(0, characters)]
             single_characters = torch.stack(single_characters)
+
             # Initialise metrics
             oneshot_metrics = OneshotMetrics()
 
-
             for idx, (study_set, recall_set) in pair_sequence_dataset:
-
 
                 study_paired_data, study_paired_target = convert_sequence_to_images(alphabet=alphabet, second_alphabet=second_alphabet,
                                                                        sequence=study_set, element='both',
@@ -262,7 +259,6 @@ def main():
                 _, study_data_B = model(study_data_B, study_target, mode='validate')
                 study_data = config['activation_coefficient']*study_data_A['ltm']['memory']['output'].detach() + study_data_B['ltm']['memory']['output'].detach()
 
-
                 study_data = study_data.to(device)
                 study_target = study_target.to(device)
 
@@ -271,6 +267,9 @@ def main():
                     recall_data = recall_data[0:batch_size]
                     recall_target = list(range(single_characters.size()[0]))
                     recall_target = recall_target * -(-batch_size//characters)
+                    recall_data_blank = torch.zeros_like(recall_data)
+                    recall_paired_data = torch.cat([recall_data, recall_data_blank], dim=3)
+
                     del recall_target[batch_size:len(recall_target)]
                     recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
                     _, recall_data = model(recall_data, recall_target, mode='validate')
@@ -284,6 +283,7 @@ def main():
                     recall_data_B, _ = convert_sequence_to_images(alphabet=alphabet_recall,
                                                                      sequence=recall_set, element='second',
                                                                      main_labels=labels_study)
+                    recall_paired_data = torch.cat([recall_data, recall_data_B], dim=3)
                     _, recall_data_A = model(recall_data_A, recall_target, mode='validate')
                     _, recall_data_B = model(recall_data_B, recall_target, mode='validate')
                     recall_data = recall_data_A['ltm']['memory']['output'].detach() + recall_data_B['ltm']['memory'][
@@ -295,7 +295,6 @@ def main():
 
                 # Reset to saved model
                 model.reset()
-
 
                 # Study
                 # --------------------------------------------------------------------------
@@ -319,7 +318,7 @@ def main():
                     if step == (config['initial_response_step']-1) or step == (config['settled_response_steps']-1):
                         with torch.no_grad():
                             _, recall_outputs = model(recall_data, recall_target, mode='recall', ec_inputs=recall_data,
-                                                      paired_inputs=study_paired_data)
+                                                      paired_inputs=recall_paired_data)
                             cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
                             for component in components:
                                 #if component == 'ltm':
@@ -400,16 +399,8 @@ def main():
                                                     secondary_feature, secondary_label,
                                                     comparison_type=comparison_type)
 
-                    # PR Accuracy (study first) - this is the version used in the paper
-                    # oneshot_metrics.compare(prefix='pr_sf_',
-                    #                         primary_features=model.features['study']['stm_pr'],
-                    #                         primary_labels=model.features['study']['labels'],
-                    #                         secondary_features=model.features['recall']['stm_pr'],
-                    #                         secondary_labels=model.features['recall']['labels'],
-                    #                         comparison_type='match_mse')
-
                     if hebbian:
-                        stm_feature = 'stm_ca3'
+                        stm_feature = 'stm_ec_ca3'
                     else:
                         stm_feature = 'stm_pr'
 
@@ -422,16 +413,16 @@ def main():
 
                     oneshot_metrics.report()
 
-
                     summary_names = [
-                        'study_inputs',
+                        'study_paired_inputs',
                         'study_' + stm_feature,
-                        'recall_inputs',
+                        'study_stm_ca3',
+
+                        'recall_paired_inputs',
                         'recall_' + stm_feature,
+                        'recall_stm_ca3',
                         'recall_stm_recon'
                     ]
-
-
 
                     summary_images = []
                     for name in summary_names:

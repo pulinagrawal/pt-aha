@@ -7,16 +7,16 @@
   "sequence_length": 90,
   "study_batch_size": 90,
   "seeds": 1,
-  "train_epochs": 5,
+  "train_epochs": 1,
   "test_single_characters": true,
   "activation_coefficient": 0.9,
-  "settled_response_steps": 100,
+  "settled_response_steps": 50,
   "initial_response_step": 20,
   "alphabet": "Latin",
   "variation": false,
   "variation_training": false,
-  "character_idx_study": 3,
-  "character_idx_recall": 4,
+  "character_idx_study": 1,
+  "character_idx_recall": 2,
   "pretrain_epochs": 5,
   "pretrain_batch_size": 150,
   "image_resize_factor": 0.5,
@@ -83,11 +83,9 @@
   "decoder": {
       "learning_rate": 0.01,
       "weight_decay": 4e-05,
-      "input_dropout": 0.25,
-      "num_layers": 1,
-      "units": [
-          800
-      ],
+      "input_dropout": 0.0,
+      "num_layers": 2,
+      "units": [100, 100],
       "norm_inputs": true
   },
   "ltm": {
@@ -95,7 +93,7 @@
       "filters": 121,
       "kernel_size": 10,
       "stride": 5,
-      "eval_stride": 5,
+      "eval_stride": 1,
       "encoder_padding": "same",
       "decoder_padding": "same",
       "encoder_nonlinearity": "none",
@@ -107,15 +105,7 @@
       "sparsity_output_factor": 1.0,
       "output_pool_size": 4,
       "output_pool_stride": 4,
-      "output_norm_per_sample": true,
-      "classifier": {
-          "learning_rate": 0.001,
-          "weight_decay": 2.5e-05,
-          "input_dropout": 0.0,
-          "hidden_dropout": [],
-          "hidden_units": [],
-          "output_units": 90
-      }
+      "output_norm_per_sample": true
   },
   "stm": {
       "msp_type": "ca1",
@@ -155,17 +145,6 @@
           "shift_range": false,
           "sum_norm": 10.0,
           "gain": 1.0
-      },
-      "pm_ec": {
-          "learning_rate": 0.01,
-          "weight_decay": 4e-05,
-          "num_units": 100,
-          "input_dropout": 0.0,
-          "hidden_dropout": 0.0,
-          "encoder_nonlinearity": "leaky_relu",
-          "decoder_nonlinearity": "leaky_relu",
-          "use_bias": true,
-          "norm_inputs": true
       },
       "msp": {
           "ca3_ca1": {
