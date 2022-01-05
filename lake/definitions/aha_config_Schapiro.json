@@ -1,0 +1,154 @@
+{
+  "experiment_name": "pairs_structure",
+  "learning_type": "episodic",
+  "communities": 3,
+  "characters": 8,
+  "sequence_length": 80,
+  "study_batch_size": 80,
+
+  "seeds": 5,
+  "train_epochs": 5,
+  "test_single_characters": true,
+  "activation_coefficient": 0.9,
+  "settled_response_steps": 200,
+  "initial_response_step": 20,
+
+  "alphabet": "Greek",
+  "variation": false,
+  "variation_training": false,
+  "character_idx_study": 0,
+  "character_idx_recall": 1,
+
+  "pretrain_epochs": 5,
+  "pretrain_batch_size": 150,
+  "image_resize_factor": 0.5,
+  "image_shape": [1, 1, 52, 52],
+  "pairs_shape": [1, 1, 52, 104],
+
+
+  "test_components": ["dg", "ca3", "pr", "ca3_ca1", "ca1", "final"],
+
+  "ltm_type": "vc",
+  "stm_type": "aha",
+
+  "metrics": {
+    "prefixes": ["ca3", "pr_rf_", "ec_out_", "ec_out_rf_"],
+    "primary_feature_names": ["study.stm_ca3","recall.stm_pr", "study.stm_recon_ec", "recall.stm_recon_ec"],
+    "primary_label_names": ["study.labels", "recall.labels","study.labels", "recall.labels"],
+    "secondary_feature_names": ["recall.stm_ca3","study.stm_pr", "recall.stm_recon_ec", "study.stm_recon_ec"],
+    "secondary_label_names": ["recall.labels", "study.labels", "recall.labels", "study.labels"],
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
+  },
+  "decoder": {
+    "learning_rate": 0.01,
+    "weight_decay": 0.00004,
+
+    "input_dropout": 0.25,
+
+    "num_layers": 1,
+    "units": [800],
+
+    "norm_inputs": true
+  },
+  "ltm": {
+    "learning_rate": 0.001,
+
+    "filters": 121,
+    "kernel_size": 10,
+
+    "stride": 5,
+    "eval_stride": 5,
+    "encoder_padding": "same",
+    "decoder_padding": "same",
+
+    "encoder_nonlinearity": "none",
+    "decoder_nonlinearity": "none",
+
+    "use_bias": true,
+    "use_tied_weights": true,
+    "use_lifetime_sparsity": true,
+
+    "sparsity": 4,
+    "sparsity_output_factor": 1.0,
+
+    "output_pool_size": 4,
+    "output_pool_stride": 4,
+    "output_norm_per_sample": true
+  },
+  "stm": {
+    "msp_type": "ca1",
+    "hebbian_perforant": false,
+
+    "dg": {
+        "inhibition_decay": 0.95,
+        "knockout_rate": 0.25,
+        "init_scale": 10.0,
+        "num_units": 225,
+        "sparsity": 10,
+        "use_stub": false,
+        "unique_mode": true
+    },
+    "ca3": {
+        "shift_range": false
+    },
+    "perforant_pr": {
+        "learning_rate": 0.01,
+        "weight_decay": 0.000025,
+
+        "num_units": 800,
+        "input_dropout": 0.25,
+        "hidden_dropout": 0.0,
+
+        "encoder_nonlinearity": "leaky_relu",
+        "decoder_nonlinearity": "none",
+        "use_bias": true,
+        "norm_inputs": false,
+
+        "noise_type": "s",
+        "noise_mode": "add",
+        "train_with_noise": 0.05,
+        "train_with_noise_pp": 0.005,
+        "test_with_noise": 0.0,
+        "test_with_noise_pp": 0.0,
+
+        "sparsity": 10,
+        "sparsity_boost": 1.0,
+        "sparsen": false,
+        "softmax": false,
+        "shift_bits": false,
+        "shift_range": false,
+        "sum_norm": 10.0,
+        "gain": 1.0
+    },
+    "msp": {
+      "ca3_ca1": {
+        "learning_rate": 0.01,
+        "weight_decay": 0.00004,
+
+        "num_units": 100,
+        "input_dropout": 0.0,
+        "hidden_dropout": 0.0,
+
+        "encoder_nonlinearity": "leaky_relu",
+        "decoder_nonlinearity": "leaky_relu",
+        "use_bias": true,
+        "norm_inputs": true
+      },
+      "ca1": {
+          "learning_rate": 0.001,
+          "weight_decay": 0.00004,
+
+          "num_units": 800,
+          "input_dropout": 0.0,
+          "hidden_dropout": 0.0,
+
+          "encoder_nonlinearity": "leaky_relu",
+          "decoder_nonlinearity": "none",
+          "use_bias": true,
+          "norm_inputs": true,
+
+          "ca3_recall": true
+      }
+    }
+  }
+}

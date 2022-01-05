@@ -333,23 +333,21 @@ class CLS(nn.Module):
 
       # iterate decoder
       if self.decoder_key in self._modules:
+        decoder_targets = inputs
 
-        if ec_inputs == None:
-          losses['decoder'], outputs['decoder'] = self.forward_decoder(inputs=next_input, targets=inputs, training=self.training)
-        else:
-          losses['decoder'], outputs['decoder'] = self.forward_decoder(inputs=next_input, targets=paired_inputs,
-                                                                       training=self.training)
+        if ec_inputs is not None and paired_inputs is not None:
+          decoder_targets = paired_inputs
+
+        losses['decoder'], outputs['decoder'] = self.forward_decoder(inputs=next_input, targets=decoder_targets,
+                                                                      training=self.training)
+
         # Decode output from STM via the EC <=> LTM
         if outputs[self.stm_key]['memory']['decoding'] is None:
           output_decoding = outputs[self.stm_key]['memory']['decoding_ec']
 
           with torch.no_grad():
-            if ec_inputs == None:
-              _, decoder_outputs = self.forward_decoder(inputs=output_decoding, targets=inputs, training=False)
-              output_decoding = decoder_outputs['ltm']['decoding']
-            else:
-              _, decoder_outputs = self.forward_decoder(inputs=output_decoding, targets=paired_inputs, training=False)
-              output_decoding = decoder_outputs['ltm']['decoding']
+            _, decoder_outputs = self.forward_decoder(inputs=output_decoding, targets=decoder_targets, training=False)
+            output_decoding = decoder_outputs['ltm']['decoding']
 
           outputs[self.stm_key]['memory']['decoding'] = output_decoding.detach()
           self.stm.features['recon'] = output_decoding.detach().cpu()
@@ -362,6 +360,9 @@ class CLS(nn.Module):
 
       self.features[mode]['inputs'] = inputs.detach().cpu()
       self.features[mode]['labels'] = labels.detach().cpu()
+
+      if paired_inputs is not None:
+        self.features[mode]['paired_inputs'] = paired_inputs.detach().cpu()
 
       for key, value in self.stm.features.items():
         self.features[mode][self.stm_key + '_' + key] = value
@@ -379,6 +380,9 @@ class CLS(nn.Module):
 
       if mode != "study" and mode != "recall":
         self.writer.add_image(mode + '/inputs', torchvision.utils.make_grid(inputs), summary_step)
+
+      if paired_inputs is not None:
+        self.writer.add_image(mode + '/paired_inputs', torchvision.utils.make_grid(paired_inputs), summary_step)
 
       self.writer.flush()
 

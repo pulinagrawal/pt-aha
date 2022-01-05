@@ -62,6 +62,10 @@ class PerforantHebb(nn.Module):
       pre_ec_ca3_out = self.ec_ca3(ec_ca3_in)
 
       pre_pc_cue = pre_dg_ca3_out + pre_ec_ca3_out
+
+      if self.config.get('use_nonlinearity', False):
+        pre_pc_cue = torch.sigmoid(pre_pc_cue)
+
       pc_cue = pre_pc_cue
 
       if self.training:
@@ -84,6 +88,9 @@ class PerforantHebb(nn.Module):
 
       post_ec_ca3_out = self.ec_ca3(ec_ca3_in)
       post_pc_cue = post_dg_ca3_out + post_ec_ca3_out
+
+      if self.config.get('use_nonlinearity', False):
+        post_pc_cue = torch.sigmoid(post_pc_cue)
 
       dg_ca3_loss = F.mse_loss(pre_dg_ca3_out, post_dg_ca3_out)
       ec_ca3_loss = F.mse_loss(pre_ec_ca3_out, post_ec_ca3_out)
