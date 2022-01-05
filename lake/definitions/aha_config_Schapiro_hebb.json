@@ -1,18 +1,18 @@
 {
   "pretrained_model_path": "./runs/associative_inference/recurrence/20211202-165246/8377",
 
-  "experiment_name": "associative_inference",
-  "learning_type": "recurrence",
+  "experiment_name": "pairs_structure",
+  "learning_type": "episodic",
   "communities": 3,
-  "characters": 9,
-  "sequence_length": 72,
-  "study_batch_size": 72,
+  "characters": 8,
+  "sequence_length": 90,
+  "study_batch_size": 30,
 
   "seeds": 2,
   "train_epochs": 5,
   "test_single_characters": true,
   "activation_coefficient": 0.9,
-  "settled_response_steps": 200,
+  "settled_response_steps": 400,
   "initial_response_step": 1,
 
   "alphabet": "Latin",

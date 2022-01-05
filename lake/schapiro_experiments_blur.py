@@ -29,7 +29,7 @@ VAL_SPLIT = 0.175
 
 def main():
     parser = argparse.ArgumentParser(description='Pair structure. Replicate of Schapiro')
-    parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_pairs.json',
+    parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_Schapiro.json',
                         help='Configuration file for experiments.')
     parser.add_argument('-l', '--logging', nargs="?", type=str, default='warning',
                         help='Logging level.')
