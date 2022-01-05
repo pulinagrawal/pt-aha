@@ -224,7 +224,11 @@ class DG(nn.Module):
     else:
       with torch.no_grad():
         encoding = self.layer(inputs)
-        filtered_encoding, _ = self.apply_sparse_filter_uniuqe(encoding)
+
+        if self.config.get('unique_mode'):
+          filtered_encoding, _ = self.apply_sparse_filter_uniuqe(encoding)
+        else:
+          filtered_encoding, _ = self.apply_sparse_filter(encoding)
 
       # Override encoding to become binary mask
       top_k_mask = utils.build_topk_mask(filtered_encoding, dim=-1, k=self.config['sparsity'])
