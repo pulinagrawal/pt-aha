@@ -112,7 +112,7 @@ class SequenceGeneratorGraph:
             within_boundary = within_boundary + [(i, i + self.characters - 1), (i + self.characters - 1, i)]
         across_other = [a for a in self.all_pairs if a not in within_internal + within_boundary + across_boundary]
 
-        return edges, [within_boundary, within_internal, across_boundary, across_other]
+        return edges, [within_internal, within_boundary, across_boundary, across_other]
 
     def _create_sequence(self):
         if self.type == "static":

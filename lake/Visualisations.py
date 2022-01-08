@@ -66,24 +66,50 @@ class BarPlotter:
              labels = ['Initial \npair', 'Initial \nshuffled', 'Settled \npair', 'Settled \nshuffled']
         if 'associative_inference' in self.path:
             labels = ['Initial \ntransitive', 'Initial \ndirect', 'Settled \ntransitive', 'Settled \ndirect']
+        if 'community_structure' in self.path:
+            labels = ['Initial \nwithin internal', 'Initial \nwithin boundary',
+                      'Initial \nacross boundary', 'Initial \nacross other',
+                      'Settled \nwithin internal', 'Settled \nwithin boundary',
+                      'Settled \nacross boundary', 'Settled \nacross other']
 
         for a in self.components:
             data_initial = self._load_predictions_pearson("pearson_initial_test_" + a)
 
             tmp_df_A = pd.DataFrame({'A': data_initial[:, 0], 'B': labels[0]})
             tmp_df_B = pd.DataFrame({'A': data_initial[:, 1], 'B': labels[1]})
+
             tmp_df_ini = pd.concat([tmp_df_A, tmp_df_B])
+
+            if 'community_structure' in self.path:
+                tmp_df_C = pd.DataFrame({'A': data_initial[:, 2], 'B': labels[2]})
+                tmp_df_D = pd.DataFrame({'A': data_initial[:, 3], 'B': labels[3]})
+                tmp_df_ini = pd.concat([tmp_df_A, tmp_df_B, tmp_df_C, tmp_df_D])
+
             tmp_df_ini['C'] = a
+
             data_settled = self._load_predictions_pearson("pearson_settled_test_" + a)
 
             tmp_df_A = pd.DataFrame({'A': data_settled[:, 0], 'B': labels[2]})
             tmp_df_B = pd.DataFrame({'A': data_settled[:, 1], 'B': labels[3]})
             tmp_df_shu = pd.concat([tmp_df_A, tmp_df_B])
+
+            if 'community_structure' in self.path:
+                tmp_df_A = pd.DataFrame({'A': data_settled[:, 0], 'B': labels[4]})
+                tmp_df_B = pd.DataFrame({'A': data_settled[:, 1], 'B': labels[5]})
+                tmp_df_C = pd.DataFrame({'A': data_settled[:, 2], 'B': labels[6]})
+                tmp_df_D = pd.DataFrame({'A': data_settled[:, 3], 'B': labels[7]})
+                tmp_df_shu = pd.concat([tmp_df_A, tmp_df_B, tmp_df_C, tmp_df_D])
+
             tmp_df_shu['C'] = a
 
             df = pd.concat([df, tmp_df_ini, tmp_df_shu])
 
-        bar_plot = sns.barplot(x='C', y='A', hue='B', data=df, palette=['#DBAE81', '#B29EC1', '#D17A3D', '#685CA2'],
+        bar_colors = ['#DBAE81', '#B29EC1', '#D17A3D', '#685CA2']
+
+        if 'community_structure' in self.path:
+            bar_colors = ['#B995C2', '#EAB264', '#C1E0EE', '#87AD57', '#4F2C8A', '#D85925', '#364BAC', '#3A7529']
+
+        bar_plot = sns.barplot(x='C', y='A', hue='B', data=df, palette=bar_colors,
                                errwidth=0.5)
         box = bar_plot.get_position()
         bar_plot.set_position([box.x0, box.y0, box.width * 0.85, box.height])  # resize position
@@ -92,28 +118,3 @@ class BarPlotter:
         plt.ylabel("Mean correlation between \npatterns after training")
         figure = bar_plot.get_figure()
         figure.savefig(os.path.join(self.path, 'bar.png'), dpi=300)
-
-# for a in ['dg', 'ca3', 'pr', 'ca3_ca1', 'ca1', 'final']:
-#           heatmap_initial = HeatmapPlotter("/Users/karina/PycharmProjects/pt-aha/lake/runs/associative_inference/recurrence/20211217-171312/predictions", "pearson_initial_" + a)
-#           heatmap_settled = HeatmapPlotter("/Users/karina/PycharmProjects/pt-aha/lake/runs/associative_inference/recurrence/20211217-171312/predictions", "pearson_settled_" + a)
-#           heatmap_initial.create_heatmap()
-#           heatmap_settled.create_heatmap()
-
-
-#experiment = 'associative_inference'
-experiment = 'pairs_structure'
-#type = 'recurrence'
-type = 'episodic'
-date = '20220104-162033'
-components = ['dg', 'ca3', 'ca3_ca1', 'ca1', 'pr']
-path = '/Users/karina/PycharmProjects/pt-aha/lake/runs/'
-
-
-bars = BarPlotter(os.path.join(path, experiment, type, date, 'predictions'), components)
-bars.create_bar()
-
-for a in components:
-            heatmap_initial = HeatmapPlotter(os.path.join(path, experiment, type, date, 'predictions'), "pearson_initial_" + a)
-            heatmap_settled = HeatmapPlotter(os.path.join(path, experiment, type, date, 'predictions'), "pearson_settled_" + a)
-            heatmap_initial.create_heatmap()
-            heatmap_settled.create_heatmap()

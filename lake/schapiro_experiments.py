@@ -37,7 +37,7 @@ def main():
         parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_Schapiro_hebb.json',
                         help='Configuration file for experiments.')
     else:
-        parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_Schapiro.json',
+        parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_Schapiro_episodic.json',
                         help='Configuration file for experiments.')
 
     parser.add_argument('-l', '--logging', nargs="?", type=str, default='warning',
@@ -220,7 +220,7 @@ def main():
             pair_sequence_dataset = enumerate(zip(study_loader, recall_loader))
 
             # Load images from the selected alphabet from a specific writer or random writers
-            alphabet = OmniglotAlphabet('./data', alphabet_name, True, False, idx_study, download=True,
+            alphabet = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], idx_study, download=True,
                                         transform=image_tfms, target_transform=None)
 
             alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, config.get('variation'), idx_recall, download=True,
@@ -365,11 +365,11 @@ def main():
                                     pearson_base_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.base_sequence]) / len(sequence_study.base_sequence)
                                     tmp_pearson_test = torch.tensor([[pearson_transitive_pattern - pearson_base_pattern, pearson_direct_pattern-pearson_base_pattern]])
                                 if experiment == 'community_structure':
-                                    pearson_within_boundary = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[0]]) / len(sequence_study.graph_sequences[0])
-                                    pearson_within_internal = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[1]]) / len(sequence_study.graph_sequences[1])
+                                    pearson_within_internal = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[0]]) / len(sequence_study.graph_sequences[0])
+                                    pearson_within_boundary = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[1]]) / len(sequence_study.graph_sequences[1])
                                     pearson_across_boundary = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[2]]) / len(sequence_study.graph_sequences[2])
                                     pearson_across_other = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[3]]) / len(sequence_study.graph_sequences[3])
-                                    tmp_pearson_test = torch.tensor([[pearson_within_boundary, pearson_within_internal, pearson_across_boundary, pearson_across_other]])
+                                    tmp_pearson_test = torch.tensor([[pearson_within_internal, pearson_within_boundary, pearson_across_boundary, pearson_across_other]])
 
                                 pearson_r_test[component] = torch.cat((pearson_r_test[component], tmp_pearson_test), 0)
 
@@ -496,6 +496,15 @@ def main():
                   encoding='UTF8') as f:
             writer_file = csv.writer(f)
             writer_file.writerows(pearson_r_settled[a].numpy())
+
+    for a in pearson_r_initial.keys():
+         heatmap_initial = HeatmapPlotter(main_summary_dir, "pearson_initial_" + a)
+         heatmap_settled = HeatmapPlotter(main_summary_dir, "pearson_settled_" + a)
+         heatmap_initial.create_heatmap()
+         heatmap_settled.create_heatmap()
+
+    bars = BarPlotter(main_summary_dir, pearson_r_initial.keys())
+    bars.create_bar()
 
 def convert_sequence_to_images(alphabet, sequence, main_labels, element='first', second_alphabet=None):
     if element == 'both':
