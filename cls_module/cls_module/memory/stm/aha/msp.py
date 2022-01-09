@@ -33,7 +33,7 @@ class MonosynapticPathway(nn.Module):
 
     ca1_output_shape = [1, self.config['ca1']['num_units']]
 
-    # Build the CA1 sub-module, to reproduce the EC inputs
+    # Build the CA3-CA1 pathway, to recall memories stored in CA3
     self.ca3_ca1 = SimpleAutoencoder(ca3_shape, self.config['ca3_ca1'], output_shape=ca1_output_shape)
     self.ca3_ca1_optimizer = optim.Adam(self.ca3_ca1.parameters(),
                                         lr=self.config['ca3_ca1']['learning_rate'],
