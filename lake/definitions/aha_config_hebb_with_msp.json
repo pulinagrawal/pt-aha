@@ -10,21 +10,24 @@
   "pretrain_batch_size": 128,
   "pretrained_model_path": "./pretrained_model_15.pt",
 
-  "study_steps": 60,
+  "study_steps": 120,
   "study_batch_size": 20,
 
-  "dataset":  "Omniglot",
+  "dataset":  "Omniglot-Instance",
+
+  "noise_factor": 0.0,
+  "degrade_factor": 0.0,
 
   "ltm_type": "vc",
   "stm_type": "aha",
 
   "metrics": {
-    "prefixes": ["ca3", "pr_rf_", "ec_out_", "ec_out_rf_"],
-    "primary_feature_names": ["study.stm_ca3","recall.stm_pr", "study.stm_recon_ec", "recall.stm_recon_ec"],
-    "primary_label_names": ["study.labels", "recall.labels","study.labels", "recall.labels"],
-    "secondary_feature_names": ["recall.stm_ca3","study.stm_pr", "recall.stm_recon_ec", "study.stm_recon_ec"],
-    "secondary_label_names": ["recall.labels", "study.labels", "recall.labels", "study.labels"],
-    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
+    "prefixes": ["ltm_sf", "ca3", "ca3_cue_rf", "ec_out", "ec_out_rf"],
+    "primary_feature_names": ["study.ltm_vc", "study.stm_ca3","recall.stm_ca3_cue", "study.stm_recon_ec", "recall.stm_recon_ec"],
+    "primary_label_names": ["study.labels", "study.labels", "recall.labels","study.labels", "recall.labels"],
+    "secondary_feature_names": ["recall.ltm_vc", "recall.stm_ca3","study.stm_ca3_cue", "recall.stm_recon_ec", "study.stm_recon_ec"],
+    "secondary_label_names": ["recall.labels", "recall.labels", "study.labels", "recall.labels", "study.labels"],
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse", "match_mse"]
   },
 
   "decoder": {
@@ -62,7 +65,7 @@
   },
   "stm": {
     "msp_type": "ca1",
-    "hebbian_perforant": false,
+    "hebbian_perforant": true,
 
     "dg": {
         "inhibition_decay": 0.95,
@@ -73,36 +76,10 @@
         "use_stub": false
     },
     "ca3": {
-        "shift_range": false
+      "shift_range": false
     },
-    "perforant_pr": {
-        "learning_rate": 0.01,
-        "weight_decay": 0.000025,
-
-        "num_units": 800,
-        "input_dropout": 0.25,
-        "hidden_dropout": 0.0,
-
-        "encoder_nonlinearity": "leaky_relu",
-        "decoder_nonlinearity": "none",
-        "use_bias": true,
-        "norm_inputs": false,
-
-        "noise_type": "s",
-        "noise_mode": "add",
-        "train_with_noise": 0.05,
-        "train_with_noise_pp": 0.005,
-        "test_with_noise": 0.0,
-        "test_with_noise_pp": 0.0,
-
-        "sparsity": 10,
-        "sparsity_boost": 1.0,
-        "sparsen": false,
-        "softmax": false,
-        "shift_bits": false,
-        "shift_range": false,
-        "sum_norm": 10.0,
-        "gain": 1.0
+    "perforant_hebb": {
+        "learning_rate": 0.01
     },
     "msp": {
       "ca3_ca1": {

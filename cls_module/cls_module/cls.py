@@ -3,6 +3,7 @@
 import os
 import collections
 import logging
+from typing import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -23,20 +24,25 @@ class CLS(nn.Module):
   ltm_key = 'ltm'
   ec_key = 'ec'
   stm_key = 'stm'
+  decoder_key = 'decoder'
 
-  def __init__(self, input_shape, config, device=None, writer=None):
+  def __init__(self, input_shape, config, device=None, writer=None, output_shape=None):
     super(CLS, self).__init__()
     print ("\n\nself.writer = writer: ", writer)
     self.config = config
     self.writer = writer
     self.device = device
     self.input_shape = input_shape
+    self.output_shape = output_shape
 
     self.step = {}
     self.previous_mode = None
 
     if self.device is None:
       self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    if output_shape is None:
+      self.output_shape = self.input_shape
 
     self.build()
 
@@ -113,6 +119,36 @@ class CLS(nn.Module):
 
     self.add_module(self.stm_key, stm_)
 
+    # 4) _________ decoder ____________________________________
+    if 'decoder' in self.config:
+      decoder_config = self.config['decoder']
+      decoder_layers = []
+      decoder_input_size = np.prod(list(next_input)[1:])
+      decoder_hidden_size = decoder_config['units'][0]
+      decoder_output_size = np.prod(list(self.output_shape)[1:])
+
+      for i in range(decoder_config['num_layers']):
+        decoder_layers.extend([
+          ('layer_' + str(i), nn.Linear(decoder_input_size, decoder_hidden_size)),
+          ('act_' + str(i), nn.LeakyReLU())
+        ])
+
+        if i < (decoder_config['num_layers'] - 1):
+          decoder_input_size = decoder_hidden_size
+          decoder_hidden_size = decoder_config['units'][i + 1]
+
+      decoder_layers.extend([
+        ('output_layer', nn.Linear(decoder_hidden_size, decoder_output_size)),
+        ('output_act', nn.LeakyReLU())
+      ])
+
+      print(decoder_layers)
+
+      self.decoder = nn.Sequential(OrderedDict(decoder_layers))
+      self.decoder_optimizer = torch.optim.Adam(self.decoder.parameters(),
+                                                lr=decoder_config['learning_rate'],
+                                                weight_decay=decoder_config['weight_decay'])
+
   def reset(self, names=None):
     """Reset relevant sub-modules."""
     if names is None:
@@ -149,6 +185,44 @@ class CLS(nn.Module):
         for child_name, child_module in parent_module.named_modules():
           if child_name == name[1]:
             child_module.train(False)
+
+  def forward_decoder(self, inputs, targets, training=None):
+    if training:
+      self.decoder_optimizer.zero_grad()
+
+    output_shape = targets.shape
+
+    inputs = torch.flatten(inputs, start_dim=1)
+    targets = torch.flatten(targets, start_dim=1)
+
+    if self.config['decoder'].get('norm_inputs'):
+      inputs = (inputs - inputs.min()) / (inputs.max() - inputs.min())
+
+    decoding = self.decoder(inputs)
+    loss = F.mse_loss(decoding, targets)
+
+    decoding_reshape = decoding.reshape(output_shape)
+
+    outputs = {
+      'ltm': {
+        'decoding': decoding_reshape.detach(),
+        'output': decoding_reshape.detach()  # Designated output for linked modules
+      }
+    }
+
+    if training:
+      loss.backward()
+      self.decoder_optimizer.step()
+
+    losses = {
+      'ltm': {
+        'loss': {
+          'decoder': loss,
+        }
+      }
+    }
+
+    return losses, outputs
 
   def load_state_dict(self, state_dict, strict=False):
     # TODO(@abdel): Why did we do this? This means that we can never re-load
@@ -199,7 +273,7 @@ class CLS(nn.Module):
   def consolidate(self, inputs, labels):
     return self.forward(inputs, labels, mode='consolidate')
 
-  def forward(self, inputs, labels=None, mode=None):  # pylint: disable=arguments-differ
+  def forward(self, inputs, labels=None, mode=None, ec_inputs=None, paired_inputs=None):  # pylint: disable=arguments-differ
     """Perform an optimisation step with the entire CLS module."""
     if labels is not None and not isinstance(labels, torch.Tensor):
       labels = torch.from_numpy(labels).to(self.device)
@@ -217,24 +291,17 @@ class CLS(nn.Module):
       self.freeze([self.ltm_key + '.classifier', self.stm_key])
 
     # Freeze ALL except LTM feature extractor during validation
-    elif mode == 'validate':
+    elif mode == 'validate' or mode == 'recall':
       self.eval()
-      self.freeze([self.ltm_key, self.stm_key])
 
     # Freeze LTM during memorisation
     elif mode == 'study':
       self.train()
       self.freeze([self.ltm_key])
 
-    # Freeze LTM during stm validation
-    elif mode == 'study_validate':
-      self.eval()
-      self.freeze([self.ltm_key])
-
     # Freeze ALL during recall
     elif mode == 'recall':
       self.eval()
-      self.freeze([self.ltm_key, self.stm_key])
 
     # Freeze ALL except LTM classifier for consolidation
     elif mode == 'consolidate':
@@ -244,15 +311,20 @@ class CLS(nn.Module):
     else:
       raise NotImplementedError('Mode not supported.')
 
-    losses[self.ltm_key], outputs[self.ltm_key] = self.ltm(inputs=inputs, targets=inputs, labels=labels)
-    preds = outputs[self.ltm_key]['classifier']['predictions']
+    if ec_inputs == None:
+      losses[self.ltm_key], outputs[self.ltm_key] = self.ltm(inputs=inputs, targets=inputs, labels=labels)
+      preds = outputs[self.ltm_key]['classifier']['predictions']
 
-    if preds is not None:
-      softmax_preds = F.softmax(preds, dim=1).argmax(dim=1)
-      accuracies[self.ltm_key] = torch.eq(softmax_preds, labels).data.cpu().float().mean()
+      if preds is not None:
+        softmax_preds = F.softmax(preds, dim=1).argmax(dim=1)
+        accuracies[self.ltm_key] = torch.eq(softmax_preds, labels).data.cpu().float().mean()
 
-    if mode in ['study', 'study_validate', 'recall']:
-      next_input = outputs[self.ltm_key]['memory']['output'].detach()  # Ensures no gradients pass through modules
+    if mode in ['study', 'recall']:
+
+      if ec_inputs == None:
+        next_input = outputs[self.ltm_key]['memory']['output'].detach()  # Ensures no gradients pass through modules
+      else:
+        next_input = ec_inputs
 
       # iterate EC
       if self.ec_key in self._modules:
@@ -262,17 +334,26 @@ class CLS(nn.Module):
       # iterate STM
       losses[self.stm_key], outputs[self.stm_key] = self.stm(inputs=next_input, targets=inputs, labels=labels)
 
-      # Decode output from STM via the EC <=> LTM
-      if outputs[self.stm_key]['memory']['decoding'] is None:
-        output_decoding = outputs[self.stm_key]['memory']['decoding_ec']
+      # iterate decoder
+      if self.decoder_key in self._modules:
+        decoder_targets = inputs
 
-        if self.ec_key in self._modules:
-          output_decoding = self.ec.forward_decode(output_decoding)
+        if ec_inputs is not None and paired_inputs is not None:
+          decoder_targets = paired_inputs
 
-        output_decoding = self.ltm.forward_decode(output_decoding)
+        losses['decoder'], outputs['decoder'] = self.forward_decoder(inputs=next_input, targets=decoder_targets,
+                                                                      training=self.training)
 
-        outputs[self.stm_key]['memory']['decoding'] = output_decoding.detach()
-        self.stm.features['recon'] = output_decoding.detach().cpu()
+        # Decode output from STM via the EC <=> LTM
+        if outputs[self.stm_key]['memory']['decoding'] is None:
+          output_decoding = outputs[self.stm_key]['memory']['decoding_ec']
+
+          with torch.no_grad():
+            _, decoder_outputs = self.forward_decoder(inputs=output_decoding, targets=decoder_targets, training=False)
+            output_decoding = decoder_outputs['ltm']['decoding']
+
+          outputs[self.stm_key]['memory']['decoding'] = output_decoding.detach()
+          self.stm.features['recon'] = output_decoding.detach().cpu()
 
       preds = outputs[self.stm_key]['classifier']['predictions']
 
@@ -282,6 +363,9 @@ class CLS(nn.Module):
 
       self.features[mode]['inputs'] = inputs.detach().cpu()
       self.features[mode]['labels'] = labels.detach().cpu()
+
+      if paired_inputs is not None:
+        self.features[mode]['paired_inputs'] = paired_inputs.detach().cpu()
 
       for key, value in self.stm.features.items():
         self.features[mode][self.stm_key + '_' + key] = value
@@ -297,7 +381,11 @@ class CLS(nn.Module):
       self.write_accuracy_summary(self.writer, accuracies, mode, summary_step)
       self.write_output_summaries(self.writer, outputs, mode, summary_step)
 
-      self.writer.add_image(mode + '/inputs', torchvision.utils.make_grid(inputs), summary_step)
+      if mode != "study" and mode != "recall":
+        self.writer.add_image(mode + '/inputs', torchvision.utils.make_grid(inputs), summary_step)
+
+      if paired_inputs is not None:
+        self.writer.add_image(mode + '/paired_inputs', torchvision.utils.make_grid(paired_inputs), summary_step)
 
       self.writer.flush()
 

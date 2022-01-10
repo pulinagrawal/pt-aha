@@ -1,43 +1,65 @@
 {
-  "seed": 42,
+  "pretrained_model_path": "./runs/associative_inference/recurrence/20211202-165246/8377",
 
-  "experiment_name": "one_shot",
+  "experiment_name": "community_structure",
+  "learning_type": "static",
+  "communities": 3,
+  "characters": 15,
+  "sequence_length": 60,
+  "study_batch_size": 60,
 
-  "image_shape": [1, 1, 52, 52],
+  "seeds": 5,
+  "train_epochs": 5,
+  "test_single_characters": true,
+  "activation_coefficient": 0.9,
+  "settled_response_steps": 200,
+  "initial_response_step": 1,
+
+  "alphabet": "Latin",
+  "variation": false,
+  "variation_training": false,
+  "character_idx_study": 1,
+  "character_idx_recall": 1,
+
+  "pretrain_epochs": 5,
+  "pretrain_batch_size": 150,
   "image_resize_factor": 0.5,
+  "image_shape": [1, 1, 52, 52],
+  "pairs_shape": [1, 1, 52, 104],
 
-  "pretrain_epochs": 2,
-  "pretrain_batch_size": 128,
 
-  "study_steps": 60,
-  "study_batch_size": 20,
+  "test_components": ["dg", "ca3", "pr", "ca3_ca1", "ca1", "final"],
 
-  "dataset":  "Omniglot",
-
-  "ltm_type": "vc_bvae",
+  "ltm_type": "vc",
   "stm_type": "aha",
 
   "metrics": {
-    "prefixes": ["ltm_sf", "ca3", "pr_rf", "ec_out", "ec_out_rf"],
-    "primary_feature_names": ["study.ltm_vc", "study.stm_ca3","recall.stm_pr", "study.stm_recon_ec", "recall.stm_recon_ec"],
-    "primary_label_names": ["study.labels", "study.labels", "recall.labels","study.labels", "recall.labels"],
-    "secondary_feature_names": ["recall.ltm_vc", "recall.stm_ca3","study.stm_pr", "recall.stm_recon_ec", "study.stm_recon_ec"],
-    "secondary_label_names": ["recall.labels", "recall.labels", "study.labels", "recall.labels", "study.labels"],
-    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse", "match_mse"]
+    "prefixes": ["ca3", "pr_rf_", "ec_out_", "ec_out_rf_"],
+    "primary_feature_names": ["study.stm_ca3","recall.stm_pr", "study.stm_recon_ec", "recall.stm_recon_ec"],
+    "primary_label_names": ["study.labels", "recall.labels","study.labels", "recall.labels"],
+    "secondary_feature_names": ["recall.stm_ca3","study.stm_pr", "recall.stm_recon_ec", "study.stm_recon_ec"],
+    "secondary_label_names": ["recall.labels", "study.labels", "recall.labels", "study.labels"],
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
   },
+  "decoder": {
+    "learning_rate": 0.01,
+    "weight_decay": 0.00004,
 
+    "input_dropout": 0.25,
+
+    "num_layers": 1,
+    "units": [800],
+
+    "norm_inputs": true
+  },
   "ltm": {
-
-    "recon_loss_const": 1,
-    "beta": 2,
-
     "learning_rate": 0.001,
 
     "filters": 121,
     "kernel_size": 10,
 
     "stride": 5,
-    "eval_stride": 1,
+    "eval_stride": 5,
     "encoder_padding": "same",
     "decoder_padding": "same",
 
@@ -53,6 +75,7 @@
 
     "output_pool_size": 4,
     "output_pool_stride": 4,
+    "output_norm_per_sample": true,
 
     "classifier": {
       "learning_rate": 0.001,
@@ -62,11 +85,11 @@
       "hidden_dropout": [],
 
       "hidden_units": [],
-      "output_units": 20
+      "output_units": 90
     }
   },
   "stm": {
-    "msp_type": "pm",
+    "msp_type": "ca1",
     "hebbian_perforant": false,
 
     "dg": {
@@ -118,11 +141,12 @@
         "hidden_dropout": 0.0,
 
         "encoder_nonlinearity": "leaky_relu",
-        "decoder_nonlinearity": "none",
+        "decoder_nonlinearity": "leaky_relu",
         "use_bias": true,
         "norm_inputs": true
     },
-    "pm": {
+    "msp": {
+      "ca3_ca1": {
         "learning_rate": 0.01,
         "weight_decay": 0.00004,
 
@@ -134,6 +158,22 @@
         "decoder_nonlinearity": "leaky_relu",
         "use_bias": true,
         "norm_inputs": true
+      },
+      "ca1": {
+          "learning_rate": 0.001,
+          "weight_decay": 0.00004,
+
+          "num_units": 800,
+          "input_dropout": 0.0,
+          "hidden_dropout": 0.0,
+
+          "encoder_nonlinearity": "leaky_relu",
+          "decoder_nonlinearity": "none",
+          "use_bias": true,
+          "norm_inputs": true,
+
+          "ca3_recall": true
+      }
     }
   }
 }

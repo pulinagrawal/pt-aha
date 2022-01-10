@@ -51,6 +51,63 @@ class DG(nn.Module):
 
     self.layer.weight.data = initial_values
 
+  def apply_sparse_filter_uniuqe(self, encoding):
+    """Sparse filtering with inhibition."""
+    hidden_size = self.config['num_units']
+
+    unique_encoding, unique_idxs = self.find_unique_samples(encoding)
+
+    batch_size = encoding.shape[0]
+    unique_batch_size = unique_encoding.shape[0]
+
+    k = int(self.config['sparsity'])
+    inhibition_decay = self.config['inhibition_decay']
+
+    cells_shape = [hidden_size]
+    batch_cells_shape = [batch_size, hidden_size]
+    unique_batch_cells_shape = [unique_batch_size, hidden_size]
+
+    device = unique_encoding.device
+
+    inhibition = torch.zeros(cells_shape, device=device)
+    filtered_unique = torch.zeros(unique_batch_cells_shape, device=device)
+
+    # Inhibit over time within a batch (because we don't bother having repeats for this).
+    for i in range(0, unique_batch_size):
+      # Create a mask with a 1 for this batch only
+      this_batch_mask = torch.zeros([unique_batch_size, 1], device=device)
+      this_batch_mask[i][0] = 1.0
+
+      refraction = 1.0 - inhibition
+      refraction_2d = refraction.unsqueeze(0)  # add batch dim
+      refracted = torch.abs(unique_encoding) * refraction_2d
+
+      # Find the "winners". The top k elements in each batch sample
+      # ---------------------------------------------------------------------
+      top_k_mask = utils.build_topk_mask(refracted, dim=-1, k=k)
+
+      # Retrospectively add batch-sparsity per cell: pick the top-k
+      # ---------------------------------------------------------------------
+      batch_filtered = unique_encoding * top_k_mask  # apply mask 3 to output 2
+      this_batch_filtered = batch_filtered * this_batch_mask
+      this_batch_topk = top_k_mask * this_batch_mask
+      fired, _ = torch.max(this_batch_topk, dim=0)  # reduce over batch
+
+      inhibition = inhibition * inhibition_decay + fired  # set to 1
+
+      filtered_unique = filtered_unique + this_batch_filtered
+
+    filtered = torch.zeros(batch_cells_shape, device=device)
+
+    for i in range(0, batch_size):
+      for j in range(0, unique_batch_size):
+        if not torch.equal(encoding[i], unique_encoding[j]):
+          continue
+
+        filtered[i] = filtered_unique[j]
+
+    return filtered, inhibition
+
   def apply_sparse_filter(self, encoding):
     """Sparse filtering with inhibition."""
     hidden_size = self.config['num_units']
@@ -135,6 +192,29 @@ class DG(nn.Module):
 
     return batch_overlap
 
+  def find_unique_samples(self, x):
+    unique_samples = torch.unique(x, dim=0)
+
+    uniuqe_idxs = torch.zeros(unique_samples.shape[0], dtype=torch.long)
+    for i, sample in enumerate(unique_samples):
+      idx = (sample == x).all(1).nonzero(as_tuple=True)
+      uniuqe_idxs[i] = idx[0][0]
+
+    return unique_samples, uniuqe_idxs
+
+  def compute_unique_overlap(self, inputs, encoding):
+    """ a, b = (0,1)
+    Overlap is where tensors have 1's in the same position.
+    Return number of bits that overlap """
+
+    unique_samples, uniuqe_idxs = self.find_unique_samples(inputs)
+    print('==== Found', unique_samples.shape[0], 'uniques out of', inputs.shape[0], 'samples')
+
+    unique_encoding = encoding[uniuqe_idxs]
+    unique_overlap = self.compute_overlap(unique_encoding)
+
+    return unique_overlap
+
   def forward(self, inputs):  # pylint: disable=arguments-differ
     inputs = torch.flatten(inputs, start_dim=1)
 
@@ -144,7 +224,11 @@ class DG(nn.Module):
     else:
       with torch.no_grad():
         encoding = self.layer(inputs)
-        filtered_encoding, _ = self.apply_sparse_filter(encoding)
+
+        if self.config.get('unique_mode'):
+          filtered_encoding, _ = self.apply_sparse_filter_uniuqe(encoding)
+        else:
+          filtered_encoding, _ = self.apply_sparse_filter(encoding)
 
       # Override encoding to become binary mask
       top_k_mask = utils.build_topk_mask(filtered_encoding, dim=-1, k=self.config['sparsity'])

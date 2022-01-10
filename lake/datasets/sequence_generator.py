@@ -1,7 +1,7 @@
 """SequenceGenerator class."""
 import numpy as np
 from igraph import Graph
-from random import randint, choice
+from random import randint, choice, shuffle
 from itertools import islice
 
 
@@ -19,9 +19,11 @@ be CD. """
         self.characters = characters
         self.length = seq_length
         self.type = type
+        self.all_pairs = [(a, b) for a in range(0, self.characters) for b in range(0, self.characters)]
         self.core_sequence = self._create_core_sequence()
         self.core_label_sequence = self._create_label_sequence()
         self.sequence = self._create_sequence()
+        self.test_sequence = self._create_test_sequence()
 
     def _create_core_sequence(self):
         if self.characters % 2 != 0:
@@ -44,7 +46,7 @@ be CD. """
         elif self.type == "episodic":
             return self.core_sequence
         else:
-            raise NotImplementedError('Learning type must be statistical or episodic.')
+            raise NotImplementedError('Learning type must be statistical or episodic in pairs structure experiments.')
 
     def _create_sequence(self):
         first = range(0, self.characters, 2)
@@ -64,41 +66,66 @@ be CD. """
             core_idx = np.random.randint(0, self.characters / 2, self.length)
             seq = [(first[a], second[a]) for a in core_idx]
         else:
-            raise NotImplementedError('Learning type must be statistical or episodic.')
+            raise NotImplementedError('Learning type must be statistical or episodic in pairs structure experiments.')
 
         return seq
+
+    def _create_test_sequence(self):
+        test_seq = [a for a in self.all_pairs if a not in self.core_sequence]
+        identical = [(a, a) for a in range(0, self.characters)]
+        test_seq = [a for a in test_seq if a not in identical]
+        return test_seq
 
 
 class SequenceGeneratorGraph:
 
-    def __init__(self, characters, seq_length, community):
+    def __init__(self, characters, seq_length, type, community):
         self.characters = int(characters / community)
         self.community = community
+        self.type = type
         self.length = seq_length
-        self.core_label_sequence = self._create_label_sequence()
+        self.all_pairs = [(a, b) for a in range(0, self.characters) for b in range(0, self.characters)]
+        self.core_label_sequence, self.graph_sequences = self._create_label_sequence()
         self.sequence = self._create_sequence()
 
-        # self.core_SL_sequence = self._create_SL_core_seque
 
     def _create_label_sequence(self):
         edges = []
+        within_internal = []
+        within_boundary = []
+        across_boundary = []
         for i in range(0, self.community * self.characters, self.characters):
             for a in range(i + 1, i + self.characters):
                 if a == i + self.characters - 1:
                     if a == self.community * self.characters - 1:
                         edges = edges + [(a, 0), (0, a)]
+                        across_boundary = across_boundary + [(a, 0), (0, a)]
                     else:
                         edges = edges + [(a, a + 1), (a + 1, a)]
+                        across_boundary = across_boundary + [(a, a + 1), (a + 1, a)]
                 else:
                     edges = edges + [(i, a), (a, i)]
+                    within_internal = within_internal + [(i, a), (a, i)]
                 for b in range(a + 1, i + self.characters):
                     edges = edges + [(a, b), (b, a)]
-        return edges
+                    within_internal = within_internal + [(a, b), (b, a)]
+            within_boundary = within_boundary + [(i, i + self.characters - 1), (i + self.characters - 1, i)]
+        across_other = [a for a in self.all_pairs if a not in within_internal + within_boundary + across_boundary]
+
+        return edges, [within_boundary, within_internal, across_boundary, across_other]
 
     def _create_sequence(self):
-        walk = list(islice(self._random_walk(), self.length))
-        seq = [(walk[i], walk[i + 1]) for i in range(len(walk) - 1)]
-        return seq
+        if self.type == "static":
+            seq = self.core_label_sequence.copy()
+            seq = seq*int(self.length / len(seq))
+            shuffle(seq)
+            return seq
+        elif self.type == "random":
+            walk = list(islice(self._random_walk(), self.length))
+            seq = [(walk[i], walk[i + 1]) for i in range(len(walk) - 1)]
+            return seq
+        else:
+            raise NotImplementedError('Learning type must be random or static in community experiments')
 
     def _random_walk(self, start=0):
         g = Graph(self.core_label_sequence)
@@ -106,3 +133,60 @@ class SequenceGeneratorGraph:
         while True:
             yield current
             current = choice(g.successors(current))
+
+
+class SequenceGeneratorTriads:
+
+    def __init__(self, characters, seq_length, type, batch_size):
+        self.characters = characters
+        self.length = seq_length
+        self.type = type
+        self.sub_length = batch_size
+        self.all_pairs = [(a, b) for a in range(0, self.characters) for b in range(0, self.characters)]
+        self.core_label_sequence = self._create_label_sequence()
+        self.sequence = self._create_sequence()
+        self.core_sequence = self.core_label_sequence
+        self.test_sequence = self._create_test_sequence()
+        self.base_sequence = self._create_base_sequence()
+
+    def _create_label_sequence(self):
+        if self.characters % 3 != 0:
+            self.characters += (3 - (10 % 3))
+            print("Number of characters was increased to next even number to create pairs.")
+        seq = []
+        for a in range(0, self.characters, 3):
+            seq = seq + [(a, a + 1), (a + 1, a + 2)]
+        return seq
+
+
+    def _create_sequence(self):
+        if self.type == 'recurrence':
+            tmp = self.core_label_sequence.copy()
+            shuffle(tmp)
+            tmp = tmp*(self.sub_length//len(tmp))
+            seq = tmp.copy()
+            for _ in range(0, int(self.length / len(seq)) - 1):
+                shuffle(tmp)
+                seq.extend(tmp)
+            return seq
+        elif self.type == 'static':
+            seq = self.core_label_sequence
+            shuffle(seq)
+            for _ in range(0, int(self.length / len(seq)) - 1):
+                tmp = self.core_label_sequence
+                shuffle(tmp)
+                seq = seq + tmp
+            return seq
+        else:
+            raise NotImplementedError('Learning type must be recurrence or static in associative experiments')
+
+    def _create_test_sequence(self):
+        seq = []
+        for a in range(0, self.characters, 3):
+            seq = seq + [(a, a + 2)]
+        return seq
+
+    def _create_base_sequence(self):
+        seq = [a for a in self.all_pairs if a not in self.core_sequence]
+        seq = [a for a in seq if a not in self.test_sequence]
+        return seq

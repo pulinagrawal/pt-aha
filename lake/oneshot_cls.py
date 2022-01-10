@@ -8,7 +8,7 @@ import glob
 from tqdm import tqdm
 
 import numpy as np
-
+import datetime
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -82,7 +82,9 @@ def main():
   # ---------------------------------------------------------------------------
   start_epoch = 1
 
-  experiment = config.get("experiment_name")
+  experiment = config.get('experiment_name')
+  now = datetime.datetime.now()
+  experiment_time = now.strftime("%Y%m%d-%H%M%S")
   if previous_run_path:
     summary_dir = previous_run_path
     print("\n\nsummary_dir if : ", summary_dir)
@@ -127,8 +129,7 @@ def main():
           return
 
   else:
-    summary_dir = utils.get_summary_dir(experiment)
-    print("\n\nsummary_dir else : ", summary_dir)
+    summary_dir = utils.get_summary_dir(experiment, experiment_time, seed)
     writer = SummaryWriter(log_dir=summary_dir)
     print("\n\nwriter else : ", writer)
     print("else prev_pretrain_path Image Shape sent from oneshot to cls : ", image_shape)
@@ -294,7 +295,7 @@ def main():
       #                                                         study_train_loss['pr_mismatch'].item(),
       #                                                         study_train_loss['pm_ec'].item()))
 
-      model(recall_data, recall_target, mode='study_validate')
+      model(study_data, study_target, mode='recall')
 
     # Recall
     # --------------------------------------------------------------------------
