@@ -17,15 +17,12 @@ from torchvision import datasets, transforms
 from cls_module.cls import CLS
 
 import utils
-# from tensorflow.keras.callbacks import TensorBoard 
 
 from datasets.tfms import NoiseTransformation, OcclusionTransformation
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation, OmniglotOneShotDataset
 from datasets.omniglot_instance_dataset import OmniglotInstanceDataset
 from datasets.cifar_one_shot_dataset import CifarTransformation, CifarOneShotDataset
 from oneshot_metrics import OneshotMetrics
-
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 LOG_EVERY = 20
 LOG_EVERY_EVAL = 1
@@ -87,9 +84,7 @@ def main():
   experiment_time = now.strftime("%Y%m%d-%H%M%S")
   if previous_run_path:
     summary_dir = previous_run_path
-    print("\n\nsummary_dir if : ", summary_dir)
     writer = SummaryWriter(log_dir=summary_dir)
-    print("if prev_pretrain_path Image Shape sent from oneshot to cls : ", image_shape)
     model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
     # Ensure that pretrained model path doesn't exist so that training occurs
@@ -131,8 +126,6 @@ def main():
   else:
     summary_dir = utils.get_summary_dir(experiment, experiment_time, seed)
     writer = SummaryWriter(log_dir=summary_dir)
-    print("\n\nwriter else : ", writer)
-    print("else prev_pretrain_path Image Shape sent from oneshot to cls : ", image_shape)
     model = CLS(image_shape, config, device=device, writer=writer).to(device)
 
   if not pretrained_model_path:
