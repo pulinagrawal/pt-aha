@@ -8,7 +8,7 @@ from cerenaut_pt_core import utils
 
 from cls_module.memory.interface import MemoryInterface
 from cerenaut_pt_core.components.sparse_autoencoder import SparseAutoencoder
-# from torchsummary import summary
+
 
 class VisualComponent(MemoryInterface):
   """An implementation of a long-term memory module using sparse convolutional autoencoder."""
@@ -21,24 +21,16 @@ class VisualComponent(MemoryInterface):
     vc = SparseAutoencoder(self.input_shape, self.config).to(self.device)
     vc_optimizer = optim.AdamW(vc.parameters(), lr=self.config['learning_rate'])
 
-    # print("\n Model Summary : ", summary(vc))
     self.add_module(self.local_key, vc)
     self.add_optimizer(self.local_key, vc_optimizer)
 
     # Compute expected output shape
     with torch.no_grad():
-      print("\n\nhi I am in VC code\n\n")
       stride = self.config.get('eval_stride', self.config.get('stride'))
       sample_input = torch.rand(1, *(self.input_shape[1:])).to(self.device)
-      print ("\nsample_input check in org visual_comp: ", sample_input)
-      print ("\nsample_input.shape check in org visual_comp: ", sample_input.shape)
       sample_output = vc.encode(sample_input, stride=stride)
-      print ("\n sample_output.shape check in org visual_comp after vc.encode: ", sample_output.shape)
-      print ("\n\n ")
       sample_output = self.prepare_encoding(sample_output)
-      print ("\n sample_output.shape check in org visual_comp after prepare_encoding: ", sample_output.shape)
       self.output_shape = list(sample_output.data.shape)
-      print ("\n self.output_shape check in org visual_comp: ", list(sample_output.data.shape))
       self.output_shape[0] = -1
 
     if 'classifier' in self.config:
