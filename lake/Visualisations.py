@@ -4,7 +4,6 @@ import re
 import string
 import matplotlib.pyplot as plt
 import seaborn as sns
-import torch
 import pandas as pd
 import numpy as np
 
@@ -17,7 +16,7 @@ class HeatmapPlotter:
 
     # Function to load results in Runs
     def _load_predictions_pearson(self):
-        name = self.component + '.*?csv$'
+        name = self.component + '.csv$'
         response = [file for file in os.listdir(self.path) if re.match(name, file)]
         with open(os.path.join(self.path, response[0]), newline='') as f:
             reader = csv.reader(f)

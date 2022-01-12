@@ -337,11 +337,23 @@ def main():
                                     recall_outputs_flat = torch.flatten(
                                         recall_outputs["stm"]["memory"][component],
                                         start_dim=1)
-                                if component == 'ca3_ca1':
+                                if component == 'ca3_ca1_deco':
+                                    recall_outputs_flat = torch.flatten(
+                                        recall_outputs["stm"]["memory"]['ca3_ca1']['decoding'],
+                                        start_dim=1)
+                                if component == 'ca3_ca1_enco':
+                                    recall_outputs_flat = torch.flatten(
+                                        recall_outputs["stm"]["memory"]['ca3_ca1']['encoding'],
+                                        start_dim=1)
+                                if component == 'ca1':
                                     recall_outputs_flat = torch.flatten(
                                         recall_outputs["stm"]["memory"][component]['decoding'],
                                         start_dim=1)
-                                if component == 'final':
+                                if component == 'final_enco':
+                                    recall_outputs_flat = torch.flatten(
+                                        recall_outputs["stm"]["memory"]['encoding'],
+                                        start_dim=1)
+                                if component == 'final_deco':
                                     recall_outputs_flat = torch.flatten(
                                         recall_outputs["stm"]["memory"]['decoding'],
                                         start_dim=1)
@@ -372,6 +384,8 @@ def main():
                                     tmp_pearson_test = torch.tensor([[pearson_within_internal, pearson_within_boundary, pearson_across_boundary, pearson_across_other]])
 
                                 pearson_r_test[component] = torch.cat((pearson_r_test[component], tmp_pearson_test), 0)
+
+
 
                 pairs_inputs.extend([[(int(a[0]), int(a[1])) for a in study_set]])
 
@@ -492,7 +506,7 @@ def main():
             writer_file.writerows(pearson_r_initial[a].numpy())
 
     for a in pearson_r_settled.keys():
-        with open(main_summary_dir + '/pearson_settled_' + a + '_' + '.csv', 'w',
+        with open(main_summary_dir + '/pearson_settled_' + a + '.csv', 'w',
                   encoding='UTF8') as f:
             writer_file = csv.writer(f)
             writer_file.writerows(pearson_r_settled[a].numpy())
