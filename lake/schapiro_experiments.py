@@ -298,7 +298,7 @@ def main():
 
                 # Study
                 # --------------------------------------------------------------------------
-                for step in range(config['settled_response_steps']):
+                for step in range(config['late_response_steps']):
 
                     study_train_losses, _ = model(study_data, study_target, mode='study', ec_inputs=study_data,
                                                       paired_inputs=study_paired_data)
@@ -315,7 +315,7 @@ def main():
                                                                        study_train_loss['pr_mismatch'].item(),
                                                                        study_train_loss['ca3_ca1'].item()))
 
-                    if step == (config['initial_response_step']-1) or step == (config['settled_response_steps']-1):
+                    if step == (config['early_response_step']-1) or step == (config['late_response_steps']-1):
                         with torch.no_grad():
                             _, recall_outputs = model(recall_data, recall_target, mode='recall', ec_inputs=recall_data,
                                                       paired_inputs=recall_paired_data)
@@ -333,27 +333,15 @@ def main():
                                 if component == 'ec_ca3':
                                     recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['ca3_cue'],
                                             start_dim=1)
-                                if component == 'ca3':
+                                if component == 'ca3_ca1':
                                     recall_outputs_flat = torch.flatten(
-                                        recall_outputs["stm"]["memory"][component],
-                                        start_dim=1)
-                                if component == 'ca3_ca1_deco':
-                                    recall_outputs_flat = torch.flatten(
-                                        recall_outputs["stm"]["memory"]['ca3_ca1']['decoding'],
-                                        start_dim=1)
-                                if component == 'ca3_ca1_enco':
-                                    recall_outputs_flat = torch.flatten(
-                                        recall_outputs["stm"]["memory"]['ca3_ca1']['encoding'],
+                                        recall_outputs["stm"]["memory"][component]['decoding'],
                                         start_dim=1)
                                 if component == 'ca1':
                                     recall_outputs_flat = torch.flatten(
                                         recall_outputs["stm"]["memory"][component]['decoding'],
                                         start_dim=1)
-                                if component == 'final_enco':
-                                    recall_outputs_flat = torch.flatten(
-                                        recall_outputs["stm"]["memory"]['encoding'],
-                                        start_dim=1)
-                                if component == 'final_deco':
+                                if component == 'recon_pair':
                                     recall_outputs_flat = torch.flatten(
                                         recall_outputs["stm"]["memory"]['decoding'],
                                         start_dim=1)
@@ -455,69 +443,67 @@ def main():
                     utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
 
 # Save results
-        predictions_initial = predictions[0:predictions.__len__():2]
-        predictions_settled = predictions[1:predictions.__len__():2]
+        predictions_early = predictions[0:predictions.__len__():2]
+        predictions_late = predictions[1:predictions.__len__():2]
 
-
-        with open(main_summary_dir + '/predictions_initial'+ str(stm_epoch) + '_'+ str(seed) + '.csv', 'w', encoding='UTF8') as f:
+        with open(main_summary_dir + '/predictions_early' + str(stm_epoch) + '_' + str(seed) + '.csv', 'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
-            writer_file.writerows(predictions_initial)
+            writer_file.writerows(predictions_early)
 
-        with open(main_summary_dir + '/predictions_settled'+ str(stm_epoch)+ '_' +str(seed)+'.csv', 'w', encoding='UTF8') as f:
+        with open(main_summary_dir + '/predictions_late' + str(stm_epoch) + '_' + str(seed)+'.csv', 'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
-            writer_file.writerows(predictions_settled)
+            writer_file.writerows(predictions_late)
 
         with open(main_summary_dir + '/pair_inputs' + str(stm_epoch) + '_' + str(
                     seed) + '.csv', 'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
             writer_file.writerows(pairs_inputs)
 
-
         oneshot_metrics.report_averages()
         writer.flush()
         writer.close()
 
-    pearson_r_initial = {a: pearson_r_tensor[a][1:pearson_r_tensor[a].shape[0]:2] for a in pearson_r_tensor}
-    pearson_r_settled = {a: pearson_r_tensor[a][2:pearson_r_tensor[a].shape[0] + 1:2] for a in pearson_r_tensor}
-    pearson_r_initial = {a: torch.mean(pearson_r_initial[a], 0) for a in pearson_r_initial}
-    pearson_r_settled = {a: torch.mean(pearson_r_settled[a], 0) for a in pearson_r_settled}
+    pearson_r_early = {a: pearson_r_tensor[a][1:pearson_r_tensor[a].shape[0]:2] for a in pearson_r_tensor}
+    pearson_r_late = {a: pearson_r_tensor[a][2:pearson_r_tensor[a].shape[0] + 1:2] for a in pearson_r_tensor}
+    pearson_r_early = {a: torch.mean(pearson_r_early[a], 0) for a in pearson_r_early}
+    pearson_r_late = {a: torch.mean(pearson_r_late[a], 0) for a in pearson_r_late}
 
-    pearson_r_initial_test = {a: pearson_r_test[a][1:pearson_r_test[a].shape[0]:2] for a in pearson_r_test}
-    pearson_r_settled_test = {a: pearson_r_test[a][2:pearson_r_test[a].shape[0] + 1:2] for a in
+    pearson_r_early_test = {a: pearson_r_test[a][1:pearson_r_test[a].shape[0]:2] for a in pearson_r_test}
+    pearson_r_late_test = {a: pearson_r_test[a][2:pearson_r_test[a].shape[0] + 1:2] for a in
                                  pearson_r_test}
 
 
-    for a in pearson_r_initial_test.keys():
-        with open(main_summary_dir + '/pearson_initial_test_' + a + '.csv',
+    for a in pearson_r_early_test.keys():
+        with open(main_summary_dir + '/pearson_early_test_' + a + '.csv',
                   'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
-            writer_file.writerows(np.stack(pearson_r_initial_test[a].numpy(), 0))
+            writer_file.writerows(np.stack(pearson_r_early_test[a].numpy(), 0))
 
-    for a in pearson_r_settled_test.keys():
-        with open(main_summary_dir + '/pearson_settled_test_' + a + '.csv',
+    for a in pearson_r_late_test.keys():
+        with open(main_summary_dir + '/pearson_late_test_' + a + '.csv',
                   'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
-            writer_file.writerows(np.stack(pearson_r_settled_test[a].numpy(), 0))
+            writer_file.writerows(np.stack(pearson_r_late_test[a].numpy(), 0))
 
-    for a in pearson_r_initial.keys():
-        with open(main_summary_dir + '/pearson_initial_' + a + '.csv', 'w',
+    for a in pearson_r_early.keys():
+        with open(main_summary_dir + '/pearson_early_' + a + '.csv', 'w',
                   encoding='UTF8') as f:
             writer_file = csv.writer(f)
-            writer_file.writerows(pearson_r_initial[a].numpy())
+            writer_file.writerows(pearson_r_early[a].numpy())
 
-    for a in pearson_r_settled.keys():
-        with open(main_summary_dir + '/pearson_settled_' + a + '.csv', 'w',
+    for a in pearson_r_late.keys():
+        with open(main_summary_dir + '/pearson_late_' + a + '.csv', 'w',
                   encoding='UTF8') as f:
             writer_file = csv.writer(f)
-            writer_file.writerows(pearson_r_settled[a].numpy())
+            writer_file.writerows(pearson_r_late[a].numpy())
 
-    for a in pearson_r_initial.keys():
-         heatmap_initial = HeatmapPlotter(main_summary_dir, "pearson_initial_" + a)
-         heatmap_settled = HeatmapPlotter(main_summary_dir, "pearson_settled_" + a)
-         heatmap_initial.create_heatmap()
-         heatmap_settled.create_heatmap()
+    for a in pearson_r_early.keys():
+         heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
+         heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
+         heatmap_early.create_heatmap()
+         heatmap_late.create_heatmap()
 
-    bars = BarPlotter(main_summary_dir, pearson_r_initial.keys())
+    bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
     bars.create_bar()
 
 def convert_sequence_to_images(alphabet, sequence, main_labels, element='first', second_alphabet=None):

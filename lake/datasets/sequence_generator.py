@@ -160,7 +160,7 @@ class SequenceGeneratorTriads:
 
 
     def _create_sequence(self):
-        if self.type == 'recurrence':
+        if self.type == 'static':
             tmp = self.core_label_sequence.copy()
             shuffle(tmp)
             tmp = tmp*(self.sub_length//len(tmp))
@@ -169,16 +169,8 @@ class SequenceGeneratorTriads:
                 shuffle(tmp)
                 seq.extend(tmp)
             return seq
-        elif self.type == 'static':
-            seq = self.core_label_sequence
-            shuffle(seq)
-            for _ in range(0, int(self.length / len(seq)) - 1):
-                tmp = self.core_label_sequence
-                shuffle(tmp)
-                seq = seq + tmp
-            return seq
         else:
-            raise NotImplementedError('Learning type must be recurrence or static in associative experiments')
+            raise NotImplementedError('Learning type must be static in associative experiments')
 
     def _create_test_sequence(self):
         seq = []

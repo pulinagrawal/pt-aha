@@ -62,41 +62,41 @@ class BarPlotter:
         df = pd.DataFrame({'A': [], 'B': [], 'C': []})
 
         if 'pairs_structure' in self.path:
-             labels = ['Initial \npair', 'Initial \nshuffled', 'Settled \npair', 'Settled \nshuffled']
+             labels = ['Early \npair', 'Early \nshuffled', 'Late \npair', 'Late \nshuffled']
         if 'associative_inference' in self.path:
-            labels = ['Initial \ntransitive', 'Initial \ndirect', 'Settled \ntransitive', 'Settled \ndirect']
+            labels = ['Early \ntransitive', 'Early \ndirect', 'Late \ntransitive', 'Late \ndirect']
         if 'community_structure' in self.path:
-            labels = ['Initial \nwithin internal', 'Initial \nwithin boundary',
-                      'Initial \nacross boundary', 'Initial \nacross other',
-                      'Settled \nwithin internal', 'Settled \nwithin boundary',
-                      'Settled \nacross boundary', 'Settled \nacross other']
+            labels = ['Early \nwithin internal', 'Early \nwithin boundary',
+                      'Early \nacross boundary', 'Early \nacross other',
+                      'Late \nwithin internal', 'Late \nwithin boundary',
+                      'Late \nacross boundary', 'Late \nacross other']
 
         for a in self.components:
-            data_initial = self._load_predictions_pearson("pearson_initial_test_" + a)
+            data_early = self._load_predictions_pearson("pearson_early_test_" + a)
 
-            tmp_df_A = pd.DataFrame({'A': data_initial[:, 0], 'B': labels[0]})
-            tmp_df_B = pd.DataFrame({'A': data_initial[:, 1], 'B': labels[1]})
+            tmp_df_A = pd.DataFrame({'A': data_early[:, 0], 'B': labels[0]})
+            tmp_df_B = pd.DataFrame({'A': data_early[:, 1], 'B': labels[1]})
 
             tmp_df_ini = pd.concat([tmp_df_A, tmp_df_B])
 
             if 'community_structure' in self.path:
-                tmp_df_C = pd.DataFrame({'A': data_initial[:, 2], 'B': labels[2]})
-                tmp_df_D = pd.DataFrame({'A': data_initial[:, 3], 'B': labels[3]})
+                tmp_df_C = pd.DataFrame({'A': data_early[:, 2], 'B': labels[2]})
+                tmp_df_D = pd.DataFrame({'A': data_early[:, 3], 'B': labels[3]})
                 tmp_df_ini = pd.concat([tmp_df_A, tmp_df_B, tmp_df_C, tmp_df_D])
 
             tmp_df_ini['C'] = a
 
-            data_settled = self._load_predictions_pearson("pearson_settled_test_" + a)
+            data_late = self._load_predictions_pearson("pearson_late_test_" + a)
 
-            tmp_df_A = pd.DataFrame({'A': data_settled[:, 0], 'B': labels[2]})
-            tmp_df_B = pd.DataFrame({'A': data_settled[:, 1], 'B': labels[3]})
+            tmp_df_A = pd.DataFrame({'A': data_late[:, 0], 'B': labels[2]})
+            tmp_df_B = pd.DataFrame({'A': data_late[:, 1], 'B': labels[3]})
             tmp_df_shu = pd.concat([tmp_df_A, tmp_df_B])
 
             if 'community_structure' in self.path:
-                tmp_df_A = pd.DataFrame({'A': data_settled[:, 0], 'B': labels[4]})
-                tmp_df_B = pd.DataFrame({'A': data_settled[:, 1], 'B': labels[5]})
-                tmp_df_C = pd.DataFrame({'A': data_settled[:, 2], 'B': labels[6]})
-                tmp_df_D = pd.DataFrame({'A': data_settled[:, 3], 'B': labels[7]})
+                tmp_df_A = pd.DataFrame({'A': data_late[:, 0], 'B': labels[4]})
+                tmp_df_B = pd.DataFrame({'A': data_late[:, 1], 'B': labels[5]})
+                tmp_df_C = pd.DataFrame({'A': data_late[:, 2], 'B': labels[6]})
+                tmp_df_D = pd.DataFrame({'A': data_late[:, 3], 'B': labels[7]})
                 tmp_df_shu = pd.concat([tmp_df_A, tmp_df_B, tmp_df_C, tmp_df_D])
 
             tmp_df_shu['C'] = a
