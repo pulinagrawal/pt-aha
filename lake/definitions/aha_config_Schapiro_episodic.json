@@ -26,7 +26,7 @@
   "image_shape": [1, 1, 52, 52],
   "pairs_shape": [1, 1, 52, 104],
 
-  "test_components": ["dg", "pr", "ca3_ca1", "ca1", "recon_pair"],
+  "test_components": ["dg", "pr", "ca3", "ca3_ca1", "ca1", "recon_pair"],
 
   "ltm_type": "vc",
   "stm_type": "aha",
