@@ -330,6 +330,9 @@ def main():
                                 if component == 'pr':
                                     recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['pr_out'],
                                                                         start_dim=1)
+                                if component == 'ca3':
+                                    recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component],
+                                                                    start_dim=1)
                                 if component == 'ec_ca3':
                                     recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['ca3_cue'],
                                             start_dim=1)

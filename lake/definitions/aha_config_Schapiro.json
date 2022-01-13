@@ -1,13 +1,14 @@
 {
-  "experiment_name": "pairs_structure",
-  "learning_type": "episodic",
+  "pretrained_model_path": "./runs/pairs_structure/episodic/20211223-101155/1732",
+  "experiment_name": "associative_inference",
+  "learning_type": "recurrence",
   "communities": 3,
-  "characters": 8,
-  "sequence_length": 80,
-  "study_batch_size": 80,
+  "characters": 9,
+  "sequence_length": 72,
+  "study_batch_size": 72,
 
-  "seeds": 5,
-  "train_epochs": 5,
+  "seeds": 2,
+  "train_epochs": 2,
   "test_single_characters": true,
   "activation_coefficient": 0.9,
   "settled_response_steps": 200,
@@ -15,9 +16,9 @@
 
   "alphabet": "Latin",
   "variation": false,
+  "character_idx_study": 2,
+  "character_idx_recall": 8,
   "variation_training": false,
-  "character_idx_study": 0,
-  "character_idx_recall": 1,
 
   "pretrain_epochs": 5,
   "pretrain_batch_size": 150,
