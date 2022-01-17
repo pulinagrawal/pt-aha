@@ -13,7 +13,7 @@
   "study_steps": 60,
   "study_batch_size": 20,
 
-  "dataset":  "Omniglot",
+  "dataset": "Omniglot",
 
   "ltm_type": "vc_bvae",
   "stm_type": "aha",
@@ -54,7 +54,7 @@
         "weight_decay": 0.0000025,
 
         "num_units": 800,
-        "input_dropout": 0.0,
+        "input_dropout": 0.25,
         "hidden_dropout": 0.0,
 
         "encoder_nonlinearity": "leaky_relu",

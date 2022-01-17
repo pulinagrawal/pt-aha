@@ -23,11 +23,14 @@ class Reshape(nn.Module):
 
 
 class Trim(nn.Module):
-    def __init__(self, *args):
+    def __init__(self, expected_shape, *args):
         super().__init__()
 
+        self.expected_shape = expected_shape
+
     def forward(self, x):
-        return x[:, :, :52, :52]
+        _, _, h, w = self.expected_shape  # b, c, h, w
+        return x[:, :, :h, :w]
 
 
 class beta_VAE(nn.Module):
@@ -41,13 +44,16 @@ class beta_VAE(nn.Module):
         self.build()
 
     def build(self):
+        # TODO: configure the architecture: num layers, etc
+        input_channel = self.input_shape[1]
+
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 32, stride=(1, 1), kernel_size=(3, 3), padding=1),
+            nn.Conv2d(input_channel, 32, stride=(1, 1), kernel_size=(3, 3), padding=1),
             nn.LeakyReLU(0.01),
             nn.Conv2d(32, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
-            nn.LeakyReLU(0.01), 
+            nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             nn.Flatten(),
         )
@@ -65,7 +71,7 @@ class beta_VAE(nn.Module):
             nn.ConvTranspose2d(64, 32, stride=(2, 2), kernel_size=(3, 3), padding=0),
             nn.LeakyReLU(0.01),
             nn.ConvTranspose2d(32, 1, stride=(1, 1), kernel_size=(3, 3), padding=0),
-            Trim(),
+            Trim(self.input_shape),
             nn.Sigmoid()
         )
 
@@ -77,7 +83,7 @@ class beta_VAE(nn.Module):
 
     def reparameterize(self, z_mu, z_log_var):
         eps = torch.randn(z_mu.size(0), z_mu.size(1)).to(z_mu.device)
-        z = z_mu + eps * torch.exp(z_log_var/2.)
+        z = z_mu + eps * torch.exp(z_log_var / 2.)
         return z
 
     def forward(self, x):
