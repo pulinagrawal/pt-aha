@@ -208,7 +208,7 @@ class DG(nn.Module):
     Return number of bits that overlap """
 
     unique_samples, uniuqe_idxs = self.find_unique_samples(inputs)
-    print('==== Found', unique_samples.shape[0], 'uniques out of', inputs.shape[0], 'samples')
+    # print('==== Found', unique_samples.shape[0], 'uniques out of', inputs.shape[0], 'samples')
 
     unique_encoding = encoding[uniuqe_idxs]
     unique_overlap = self.compute_overlap(unique_encoding)
@@ -217,6 +217,9 @@ class DG(nn.Module):
 
   def forward(self, inputs):  # pylint: disable=arguments-differ
     inputs = torch.flatten(inputs, start_dim=1)
+
+    # Ensure inputs are in [0.. 1] range
+    inputs = (inputs - inputs.min()) / (inputs.max() - inputs.min())
 
     if self.config['use_stub']:
       top_k_mask = self.stub(inputs)
