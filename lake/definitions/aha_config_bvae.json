@@ -6,8 +6,9 @@
   "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
 
-  "pretrain_epochs": 30,
+  "pretrain_epochs": 10,
   "pretrain_batch_size": 128,
+  "pretrained_model_path": "./runs/one_shot/bvae-pretrain/predictions/pretrained_model_10.pt",
 
   "study_steps": 60,
   "study_batch_size": 20,
@@ -31,11 +32,7 @@
     "beta": 2,
 
     "learning_rate": 0.0005,
-    "latent_size": 30,
-    "kl_tolerance": 0.0,
-
-    "output_pool_size": 0,
-    "output_pool_stride": 0
+    "latent_size": 30
   },
   "stm": {
     "msp_type": "pm",

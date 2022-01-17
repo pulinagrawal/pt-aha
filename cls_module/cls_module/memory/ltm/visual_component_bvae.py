@@ -34,10 +34,13 @@ class beta_VAE(nn.Module):
     def __init__(self, input_shape, config, output_shape=None):
         super().__init__()
 
+        self.config = config
+        self.input_shape = input_shape
+        self.output_shape = output_shape
+
         self.build()
 
-    def build(self):           
-
+    def build(self):
         self.encoder = nn.Sequential(
             nn.Conv2d(1, 32, stride=(1, 1), kernel_size=(3, 3), padding=1),
             nn.LeakyReLU(0.01),
@@ -47,46 +50,38 @@ class beta_VAE(nn.Module):
             nn.LeakyReLU(0.01), 
             nn.Conv2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             nn.Flatten(),
-        ) 
-        # self.z_mean = nn.Sequential(
-        #     nn.Flatten(), 
-        #     torch.nn.Linear(3136, 30))
-        # self.z_log_var = nn.Sequential(
-        #     nn.Flatten(), 
-        #     torch.nn.Linear(3136, 30))
-        self.z_mean = torch.nn.Linear(3136, 30)
-        self.z_log_var = torch.nn.Linear(3136, 30)
+        )
+
+        self.z_mean = torch.nn.Linear(3136, self.config['latent_size'])
+        self.z_log_var = torch.nn.Linear(3136, self.config['latent_size'])
 
         self.decoder = nn.Sequential(
-            torch.nn.Linear(30, 3136),
+            torch.nn.Linear(self.config['latent_size'], 3136),
             Reshape(-1, 64, 7, 7),
             nn.ConvTranspose2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             nn.LeakyReLU(0.01),
-            nn.ConvTranspose2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),                
+            nn.ConvTranspose2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
             nn.LeakyReLU(0.01),
-            nn.ConvTranspose2d(64, 32, stride=(2, 2), kernel_size=(3, 3), padding=0),                
+            nn.ConvTranspose2d(64, 32, stride=(2, 2), kernel_size=(3, 3), padding=0),
             nn.LeakyReLU(0.01),
-            nn.ConvTranspose2d(32, 1, stride=(1, 1), kernel_size=(3, 3), padding=0), 
-            Trim(), 
+            nn.ConvTranspose2d(32, 1, stride=(1, 1), kernel_size=(3, 3), padding=0),
+            Trim(),
             nn.Sigmoid()
-            )
+        )
 
-    def encode(self, x, stride):
+    def encode(self, x):
         x = self.encoder(x)
         z_mean, z_log_var = self.z_mean(x), self.z_log_var(x)
         encoding = self.reparameterize(z_mean, z_log_var)
         return encoding
-        
+
     def reparameterize(self, z_mu, z_log_var):
         eps = torch.randn(z_mu.size(0), z_mu.size(1)).to(z_mu.device)
-        z = z_mu + eps * torch.exp(z_log_var/2.) 
-        # print("\nz\n". type(z))
+        z = z_mu + eps * torch.exp(z_log_var/2.)
         return z
-        
-    def forward(self, x, stride):
+
+    def forward(self, x):
         x = self.encoder(x)
-        # z_mean, z_log_var = self.z_mean(x), self.z_log_var(x)
-        # encoding = self.reparameterize(z_mean, z_log_var)
         self.z_m, self.z_lv = self.z_mean(x), self.z_log_var(x)
         encoding = self.reparameterize(self.z_m, self.z_lv)
         decoding = self.decoder(encoding)
@@ -94,75 +89,42 @@ class beta_VAE(nn.Module):
 
     def get_distribution(self):
         return self.z_m, self.z_lv
-        # return self.z_mean, self.z_log_var
 
 
 class VisualComponentBVAE(MemoryInterface):
-    """An implementation of a long-term memory module using sparse convolutional autoencoder."""
+    """An implementation of a long-term memory module using beta variational autoencoder (beta-VAE)."""
 
     global_key = 'ltm'
     local_key = 'vc'
 
     def build(self):
-
-        LEARNING_RATE = 0.0005
-
         """Build Visual Component as long-term memory module."""
-        # print("\n\n\nprint", self.input_shape)
         vc = beta_VAE(self.input_shape, self.config).to(self.device)
-        vc_optimizer = torch.optim.Adam(vc.parameters(), lr=LEARNING_RATE) 
+        vc_optimizer = torch.optim.Adam(vc.parameters(), lr=self.config['learning_rate'])
 
         self.add_module(self.local_key, vc)
         self.add_optimizer(self.local_key, vc_optimizer)
 
         # Compute expected output shape
         with torch.no_grad():
-            stride = self.config.get('eval_stride', self.config.get('stride'))
             sample_input = torch.rand(1, *(self.input_shape[1:])).to(self.device)
-            print ("\nsample_input check in my visual_comp: ", sample_input)
-            print ("\nsample_input.shape check in my visual_comp: ", sample_input.shape)
-            sample_output = vc.encode(sample_input, stride=stride)
-            print ("\n sample_output.shape check in my visual_comp after vc.encode: ", sample_output.shape)
-            print ("\n\n ")
-            # sample_output = self.prepare_encoding(sample_output)
-            # print ("\n sample_output.shape check in my visual_comp after prepare_encoding: ", sample_output.shape)
+            sample_output = vc.encode(sample_input)
             self.output_shape = list(sample_output.data.shape)
-            print ("\n self.output_shape check in my visual_comp: ", list(sample_output.data.shape))
             self.output_shape[0] = -1
 
-        # if 'classifier' in self.config:
-        #     self.build_classifier(input_shape=self.output_shape)
-
-    # def forward_decode(self, encoding): 
-    #     # Optionally use different stride at test time
-    #     stride = self.config['stride']
-    #     if not self.vc.training and 'eval_stride' in self.config:
-    #         stride = self.config['eval_stride']
-
-    #     encoding = self.unprepare_encoding(encoding)
-
-    #     with torch.no_grad():
-    #         return self.vc.decode(encoding, stride)
-
-    def forward_memory(self, inputs, targets, labels):    
-
+    def forward_memory(self, inputs, targets, labels):
         """Perform an optimization step using the memory module."""
         del labels
 
         if self.vc.training:
             self.vc_optimizer.zero_grad()
 
-        # Optionally use different stride at test time
-        stride = self.config['stride']
-        if not self.vc.training and 'eval_stride' in self.config:
-            stride = self.config['eval_stride']
+        encoding, decoding = self.vc(inputs)
+        mu, logvar = self.vc.get_distribution()
 
-        encoding, decoding = self.vc(inputs, stride)
-        # loss = F.mse_loss(decoding, targets)
-
-        z_m, z_lv = self.vc.get_distribution()
-        kl_div_loss = -0.5 * torch.sum(1 + z_lv - z_m**2 - torch.exp(z_lv), axis=1)
+        kl_div_loss = -0.5 * torch.sum(1 + logvar - mu ** 2 - torch.exp(logvar), dim=1)
         kl_div_loss = kl_div_loss.mean()
+
         # reconstruction_loss = F.binary_cross_entropy(decoding, targets, reduction='sum')
         reconstruction_loss = F.mse_loss(decoding, targets, reduction='sum')
 
@@ -190,31 +152,7 @@ class VisualComponentBVAE(MemoryInterface):
         return loss, outputs
 
     def prepare_encoding(self, encoding):
-        
-        """Postprocessing for the VC encoding."""
-        # encoding = encoding.detach()
+        return encoding.detach()
 
-        # if self.config['output_pool_size'] > 1:
-        #     encoding, self.pool_indices = F.max_pool2d(
-        #         encoding,
-        #         kernel_size=self.config['output_pool_size'],
-        #         stride=self.config['output_pool_stride'],
-        #         padding=self.config.get('output_pool_padding', 0), return_indices=True)
-
-        return encoding
-
-    # def unprepare_encoding(self, prepared_encoding):
-
-    #     """Undo any postprocessing for the VC encoding."""
-    #     encoding = prepared_encoding
-    #     encoding = prepared_encoding.detach()
-
-    #     # if self.config['output_pool_size'] > 1:
-    #     #     encoding = F.max_unpool2d(
-    #     #         encoding,
-    #     #         kernel_size=self.config['output_pool_size'],
-    #     #         stride=self.config['output_pool_stride'],
-    #     #         padding=self.config.get('output_pool_padding', 0),
-    #     #         indices=self.pool_indices)
-
-    #     return encoding
+    def unprepare_encoding(self, prepared_encoding):
+        return prepared_encoding
