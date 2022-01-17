@@ -28,7 +28,6 @@ class CLS(nn.Module):
 
   def __init__(self, input_shape, config, device=None, writer=None, output_shape=None):
     super(CLS, self).__init__()
-    print ("\n\nself.writer = writer: ", writer)
     self.config = config
     self.writer = writer
     self.device = device
@@ -76,7 +75,6 @@ class CLS(nn.Module):
                      device=self.device,
                      writer=self.writer)
 
-    print ("\n\nltm_.output_shape in cls.py ltm", ltm_.output_shape)
     next_input = ltm_.output_shape
     self.add_module(self.ltm_key, ltm_)
 
