@@ -15,7 +15,8 @@ from cls_module.cls import CLS
 from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph, SequenceGeneratorTriads
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
-from Visualisations import HeatmapPlotter
+from Visualisations import HeatmapPlotter, barPlotter
+from Visualisations import FrequencyPlotter
 from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
 
@@ -248,6 +249,13 @@ def main():
 
             for idx, (study_set, validation_set) in pair_sequence_dataset:
 
+                # Reset to saved model
+                model.reset()
+
+                if learning_type == 'statistical':
+                    frequency = FrequencyPlotter(main_summary_dir, study_set, str(seed) + '_' + str(idx))
+                    frequency.create_bar()
+
                 study_paired_data, study_paired_target = convert_sequence_to_images(alphabet=alphabet,
                                                                            sequence=study_set, element='both',
                                                                             main_labels=labels_study)
@@ -309,6 +317,9 @@ def main():
                                                                            study_train_loss['pr'].item(),
                                                                            study_train_loss['pr_mismatch'].item(),
                                                                            study_train_loss['ca3_ca1'].item()))
+
+                        validation_losses, _ = model(val_data, val_target, mode='validate', ec_inputs=val_data,
+                                                     paired_inputs=val_paired_data)
 
                         if step == (config['early_response_step']-1) or step == (config['late_response_steps']-1):
                             with torch.no_grad():
@@ -373,14 +384,6 @@ def main():
 
                 pairs_inputs.extend([[(int(a[0]), int(a[1])) for a in study_set]])
 
-                validation_losses, _ = model(val_data, val_target, mode='validate', ec_inputs=val_data,
-                                             paired_inputs=val_paired_data)
-                validation_loss = study_train_losses['stm']['memory']['loss']
-                print('Val Losses batch {} \t PR:{:.6f} \t PR mismatch: {:.6f} \t ca3_ca1: {:.6f}'.format
-                      (idx,
-                       validation_loss['pr'].item(),
-                       validation_loss['pr_mismatch'].item(),
-                       validation_loss['ca3_ca1'].item()))
 
                 # Recall
                 # --------------------------------------------------------------------------
@@ -407,7 +410,7 @@ def main():
                                                         comparison_type=comparison_type)
 
                         if hebbian:
-                            stm_feature = 'stm_ec_ca3'
+                            stm_feature = 'stm_ca3_cue'
                         else:
                             stm_feature = 'stm_pr'
 
@@ -445,10 +448,8 @@ def main():
                             summary_image = (name, summary_features, summary_shape)
                             summary_images.append(summary_image)
 
-                        utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
+                        utils.add_completion_summary(summary_images, summary_dir, str(idx) + '_' + str(seed), save_figs=True)
 
-        # Reset to saved model
-        model.reset()
 
         # Save results
         predictions_early = predictions[0:predictions.__len__():2]

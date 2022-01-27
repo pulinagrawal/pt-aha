@@ -263,6 +263,7 @@ def add_completion_summary(summary_images, folder, batch, save_figs=True, plot_e
   else:
     plt.show()
 
+  plt.close()
 
 def square_image_shape_from_1d(filters):
   """

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import numpy as np
+import collections
 
 
 class HeatmapPlotter:
@@ -117,3 +118,22 @@ class BarPlotter:
         plt.ylabel("Mean correlation between \npatterns after training")
         figure = bar_plot.get_figure()
         figure.savefig(os.path.join(self.path, 'bar.png'), dpi=300)
+
+class FrequencyPlotter:
+
+    def __init__(self, path, sequence, seed_batch):
+        self.path = path
+        self.sequence = sequence.tolist()
+        self.seed_batch = seed_batch
+
+    def create_bar(self):
+
+        plt.clf()
+        characters = [list(string.ascii_uppercase)[int(a)] + list(string.ascii_uppercase)[int(b)] for [a, b] in self.sequence]
+        frequency = collections.Counter(characters)
+        frequency = {k: v for k, v in sorted(frequency.items(), key=lambda item: item[1], reverse=True)}
+        plt.bar(frequency.keys(), frequency.values())
+        y = [i for i in range(0, max(frequency.values())+1, 2)]
+        plt.yticks(y, y)
+        plt.grid(axis='y')
+        plt.savefig(os.path.join(self.path, 'frequency_' + self.seed_batch + '.png'), dpi=300)
