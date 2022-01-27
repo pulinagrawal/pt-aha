@@ -5,7 +5,7 @@
 ################################################################################
 
 export MACHINE=${1:-incbox-tb}
-DEST_DIR='~/agief-remote-run/pt-aha'
+DEST_DIR='~/agief-remote-run/mohit-pt-aha'
 
 # sync this folder
 cmd="rsync --chmod=ug=rwX,o=rX --perms -av ./ $MACHINE:$DEST_DIR --exclude='.git/' --filter=':- .gitignore'"

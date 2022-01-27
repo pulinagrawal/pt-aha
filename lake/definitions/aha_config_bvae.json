@@ -6,17 +6,16 @@
   "image_shape": [1, 1, 52, 52],
   "image_resize_factor": 0.5,
 
-  "pretrain_epochs": 2,
+  "pretrain_epochs": 10,
   "pretrain_batch_size": 128,
+  "pretrained_model_path": "./runs/one_shot/bvae-pretrain/predictions/pretrained_model_10.pt",
 
   "study_steps": 60,
   "study_batch_size": 20,
 
-  "pretrained_model_path": "./pretrained_model_15.pt",
+  "dataset": "Omniglot",
 
-  "dataset":  "Omniglot",
-
-  "ltm_type": "vc",
+  "ltm_type": "vc_bvae",
   "stm_type": "aha",
 
   "metrics": {
@@ -29,43 +28,11 @@
   },
 
   "ltm": {
-
     "recon_loss_const": 1,
     "beta": 2,
 
-    "learning_rate": 0.001,
-
-    "filters": 121,
-    "kernel_size": 10,
-
-    "stride": 5,
-    "eval_stride": 1,
-    "encoder_padding": "same",
-    "decoder_padding": "same",
-
-    "encoder_nonlinearity": "none",
-    "decoder_nonlinearity": "none",
-
-    "use_bias": true,
-    "use_tied_weights": true,
-    "use_lifetime_sparsity": true,
-
-    "sparsity": 4,
-    "sparsity_output_factor": 1.0,
-
-    "output_pool_size": 4,
-    "output_pool_stride": 4,
-
-    "classifier": {
-      "learning_rate": 0.001,
-      "weight_decay": 0.000025,
-
-      "input_dropout": 0.0,
-      "hidden_dropout": [],
-
-      "hidden_units": [],
-      "output_units": 20
-    }
+    "learning_rate": 0.0005,
+    "latent_size": 30
   },
   "stm": {
     "msp_type": "pm",
@@ -84,7 +51,7 @@
     },
     "perforant_pr": {
         "learning_rate": 0.01,
-        "weight_decay": 0.000025,
+        "weight_decay": 0.0000025,
 
         "num_units": 800,
         "input_dropout": 0.25,
@@ -115,12 +82,12 @@
         "learning_rate": 0.01,
         "weight_decay": 0.00004,
 
-        "num_units": 100,
+        "num_units": 800,
         "input_dropout": 0.0,
         "hidden_dropout": 0.0,
 
         "encoder_nonlinearity": "leaky_relu",
-        "decoder_nonlinearity": "none",
+        "decoder_nonlinearity": "leaky_relu",
         "use_bias": true,
         "norm_inputs": true
     },

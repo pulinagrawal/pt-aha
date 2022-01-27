@@ -105,10 +105,12 @@ class AHA(MemoryInterface):
     outputs = {}
     features = {}
 
+    norm_dims = list(range(inputs.dim()))
+    norm_dims = norm_dims[1:]
     normed_inputs = inputs
     frobenius_norm = torch.sqrt(
         torch.sum(torch.square(inputs),
-                  dim=[1, 2, 3],
+                  dim=norm_dims,
                   keepdim=True)
     )
 
