@@ -15,7 +15,7 @@ from cls_module.cls import CLS
 from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph, SequenceGeneratorTriads
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
-from Visualisations import HeatmapPlotter, barPlotter
+from Visualisations import HeatmapPlotter, BarPlotter
 from Visualisations import FrequencyPlotter
 from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
@@ -245,8 +245,6 @@ def main():
         oneshot_metrics = OneshotMetrics()
 
         for stm_epoch in range(config['train_epochs']):
-
-
             for idx, (study_set, validation_set) in pair_sequence_dataset:
 
                 # Reset to saved model
