@@ -219,7 +219,8 @@ class DG(nn.Module):
     inputs = torch.flatten(inputs, start_dim=1)
 
     # Ensure inputs are in [0.. 1] range
-    inputs = (inputs - inputs.min()) / (inputs.max() - inputs.min())
+    if self.config.get('norm_inputs'):
+      inputs = (inputs - inputs.min()) / (inputs.max() - inputs.min())
 
     if self.config['use_stub']:
       top_k_mask = self.stub(inputs)
