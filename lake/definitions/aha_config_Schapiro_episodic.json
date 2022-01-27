@@ -1,34 +1,33 @@
 {
-  "pretrained_model_path": "./runs/pairs_structure/episodic/pretrain-5/551/",
-
+  "pretrained_model_path": "./runs/pairs_structure/episodic/20220112-234052/6517/",
   "experiment_name": "pairs_structure",
-  "learning_type": "episodic",
+  "learning_type": "statistical",
   "communities": 3,
   "characters": 8,
-  "sequence_length": 80,
-  "study_batch_size": 80,
+  "sequence_length": 160,
+  "study_batch_size": 160,
 
-  "seeds": 1,
-  "train_epochs": 1,
+  "seeds": 4,
+  "train_epochs": 2,
   "test_single_characters": true,
   "activation_coefficient": 0.9,
-  "settled_response_steps": 60,
-  "initial_response_step": 20,
+  "late_response_steps": 100,
+  "early_response_step": 20,
 
-  "alphabet": "Latin",
+  "alphabet": "N_Ko",
   "variation": false,
   "variation_training": false,
   "character_idx_study": 0,
-  "character_idx_recall": 1,
+  "character_idx_recall": 0,
 
-  "pretrain_epochs": 5,
+  "pretrain_epochs": 4,
   "pretrain_batch_size": 150,
   "image_resize_factor": 0.5,
   "image_shape": [1, 1, 52, 52],
   "pairs_shape": [1, 1, 52, 104],
 
-  "test_components": ["dg", "ca3", "pr", "ca3_ca1", "ca1", "final"],
 
+  "test_components": ["dg", "pr", "ca3", "ca3_ca1", "ca1", "recon_pair"],
   "ltm_type": "vc",
   "stm_type": "aha",
 

@@ -112,7 +112,7 @@ class SequenceGeneratorGraph:
             within_boundary = within_boundary + [(i, i + self.characters - 1), (i + self.characters - 1, i)]
         across_other = [a for a in self.all_pairs if a not in within_internal + within_boundary + across_boundary]
 
-        return edges, [within_boundary, within_internal, across_boundary, across_other]
+        return edges, [within_internal, within_boundary, across_boundary, across_other]
 
     def _create_sequence(self):
         if self.type == "static":
@@ -160,7 +160,7 @@ class SequenceGeneratorTriads:
 
 
     def _create_sequence(self):
-        if self.type == 'recurrence':
+        if self.type == 'static':
             tmp = self.core_label_sequence.copy()
             shuffle(tmp)
             tmp = tmp*(self.sub_length//len(tmp))
@@ -169,16 +169,8 @@ class SequenceGeneratorTriads:
                 shuffle(tmp)
                 seq.extend(tmp)
             return seq
-        elif self.type == 'static':
-            seq = self.core_label_sequence
-            shuffle(seq)
-            for _ in range(0, int(self.length / len(seq)) - 1):
-                tmp = self.core_label_sequence
-                shuffle(tmp)
-                seq = seq + tmp
-            return seq
         else:
-            raise NotImplementedError('Learning type must be recurrence or static in associative experiments')
+            raise NotImplementedError('Learning type must be static in associative experiments')
 
     def _create_test_sequence(self):
         seq = []
