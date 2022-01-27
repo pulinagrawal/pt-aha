@@ -47,7 +47,7 @@ class CLS(nn.Module):
     self.build()
 
     self.features = {}
-    self.stm_modes = ['study', 'study_validate', 'recall']
+    self.stm_modes = ['study', 'validate', 'recall']
 
     for mode in self.stm_modes:
       self.features[mode] = {}
@@ -184,6 +184,7 @@ class CLS(nn.Module):
             child_module.train(False)
 
   def forward_decoder(self, inputs, targets, training=None):
+
     if training:
       self.decoder_optimizer.zero_grad()
 
@@ -196,28 +197,31 @@ class CLS(nn.Module):
       inputs = (inputs - inputs.min()) / (inputs.max() - inputs.min())
 
     decoding = self.decoder(inputs)
+
+
     loss = F.mse_loss(decoding, targets)
 
     decoding_reshape = decoding.reshape(output_shape)
 
     outputs = {
-      'ltm': {
-        'decoding': decoding_reshape.detach(),
-        'output': decoding_reshape.detach()  # Designated output for linked modules
+        'ltm': {
+          'decoding': decoding_reshape.detach(),
+          'output': decoding_reshape.detach()  # Designated output for linked modules
+        }
       }
-    }
 
     if training:
       loss.backward()
       self.decoder_optimizer.step()
 
+
     losses = {
-      'ltm': {
-        'loss': {
-          'decoder': loss,
+        'ltm': {
+          'loss': {
+            'decoder': loss,
+          }
         }
       }
-    }
 
     return losses, outputs
 
@@ -255,14 +259,17 @@ class CLS(nn.Module):
   def pretrain(self, inputs, labels):
     return self.forward(inputs, labels, mode='pretrain')
 
+  def extract(self, inputs, labels):
+    return self.forward(inputs, labels, mode='extractor')
+
   def validate(self, inputs, labels):
     return self.forward(inputs, labels, mode='validate')
 
   def memorise(self, inputs, labels):
     return self.forward(inputs, labels, mode='study')
 
-  def memorise_test(self, inputs, labels):
-    return self.forward(inputs, labels, mode='study_validate')
+  #def memorise_test(self, inputs, labels):
+   # return self.forward(inputs, labels, mode='study_validate')
 
   def recall(self, inputs, labels):
     return self.forward(inputs, labels, mode='recall')
@@ -288,17 +295,13 @@ class CLS(nn.Module):
       self.freeze([self.ltm_key + '.classifier', self.stm_key])
 
     # Freeze ALL except LTM feature extractor during validation
-    elif mode == 'validate' or mode == 'recall':
+    elif mode in ['extractor', 'validate', 'recall']:
       self.eval()
 
     # Freeze LTM during memorisation
     elif mode == 'study':
       self.train()
       self.freeze([self.ltm_key])
-
-    # Freeze ALL during recall
-    elif mode == 'recall':
-      self.eval()
 
     # Freeze ALL except LTM classifier for consolidation
     elif mode == 'consolidate':
@@ -316,7 +319,7 @@ class CLS(nn.Module):
         softmax_preds = F.softmax(preds, dim=1).argmax(dim=1)
         accuracies[self.ltm_key] = torch.eq(softmax_preds, labels).data.cpu().float().mean()
 
-    if mode in ['study', 'recall']:
+    if mode in ['study', 'validate', 'recall']:
 
       if ec_inputs == None:
         next_input = outputs[self.ltm_key]['memory']['output'].detach()  # Ensures no gradients pass through modules
@@ -378,7 +381,7 @@ class CLS(nn.Module):
       self.write_accuracy_summary(self.writer, accuracies, mode, summary_step)
       self.write_output_summaries(self.writer, outputs, mode, summary_step)
 
-      if mode != "study" and mode != "recall":
+      if mode not in ['study', 'recall', 'validate']:
         self.writer.add_image(mode + '/inputs', torchvision.utils.make_grid(inputs), summary_step)
 
       if paired_inputs is not None:
@@ -400,16 +403,17 @@ class CLS(nn.Module):
       return False
 
   def write_loss_summary(self, writer, losses, mode, summary_step):
-    for module_name in losses:
-      for submodule_name in losses[module_name]:
-        for metric_key, metric_value in losses[module_name][submodule_name].items():
-          scope = mode + '/' + module_name + '/' + submodule_name + '/' + metric_key
+    if mode is not 'recall':
+      for module_name in losses:
+        for submodule_name in losses[module_name]:
+          for metric_key, metric_value in losses[module_name][submodule_name].items():
+            scope = mode + '/' + module_name + '/' + submodule_name + '/' + metric_key
 
-          if isinstance(metric_value, dict):
-            for submetric_key, submetric_value in metric_value.items():
-              writer.add_scalar(scope + '/' + submetric_key, submetric_value, summary_step)
-          else:
-            writer.add_scalar(scope, metric_value, summary_step)
+            if isinstance(metric_value, dict):
+              for submetric_key, submetric_value in metric_value.items():
+                writer.add_scalar(scope + '/' + submetric_key, submetric_value, summary_step)
+            else:
+              writer.add_scalar(scope, metric_value, summary_step)
 
   def write_accuracy_summary(self, writer, accuracies, mode, summary_step):
     for module_name, accuracy_value in accuracies.items():

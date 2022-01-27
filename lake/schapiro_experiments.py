@@ -15,7 +15,8 @@ from cls_module.cls import CLS
 from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph, SequenceGeneratorTriads
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
-# from Visualisations import HeatmapPlotter
+from Visualisations import HeatmapPlotter, barPlotter
+from Visualisations import FrequencyPlotter
 from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
 
@@ -187,198 +188,202 @@ def main():
         # ---------------------------------------------------------------------------
         print('-------- Few-shot Evaluation (Study and Recall) ---------')
 
-        length = config.get('sequence_length')
-        communities = config.get('communities')
+        length = config['sequence_length']
         batch_size = config['study_batch_size']
-        idx_study = config.get('character_idx_study')
-        idx_recall = config.get('character_idx_recall')
-        single_recall = config.get('test_single_characters')
 
 
         # Create sequence
         if experiment == "pairs_structure":
             sequence_study = SequenceGenerator(characters, length, learning_type)
-            sequence_recall = SequenceGenerator(characters, length, learning_type)
+            sequence_validation = SequenceGenerator(characters, length, learning_type)
         elif experiment == "community_structure":
-            sequence_study = SequenceGeneratorGraph(characters, length, learning_type, communities)
-            sequence_recall = SequenceGeneratorGraph(characters, length, learning_type, communities)
+            sequence_study = SequenceGeneratorGraph(characters, length, learning_type, config['communities'])
+            sequence_validation = SequenceGeneratorGraph(characters, length, learning_type, config['communities'])
         elif experiment == "associative_inference":
             sequence_study = SequenceGeneratorTriads(characters, length, learning_type, batch_size)
-            sequence_recall = SequenceGeneratorTriads(characters, length, learning_type, batch_size)
+            sequence_validation = SequenceGeneratorTriads(characters, length, learning_type, batch_size)
 
         predictions = []
         pairs_inputs = []
 
+        sequence_study_tensor = torch.FloatTensor(sequence_study.sequence)
+        sequence_validation_tensor = torch.FloatTensor(sequence_validation.sequence)
+        study_loader = torch.utils.data.DataLoader(sequence_study_tensor, batch_size=batch_size, shuffle=False)
+        validation_loader = torch.utils.data.DataLoader(sequence_validation_tensor, batch_size=batch_size, shuffle=False)
+
+        pair_sequence_dataset = enumerate(zip(study_loader, validation_loader))
+
+        # Load images from the selected alphabet from a specific writer or random writers
+        alphabet = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], config['character_idx_study'], download=True,
+                                        transform=image_tfms, target_transform=None)
+
+        alphabet_validation = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], config['character_idx_validation'], download=True,
+                                               transform=image_tfms, target_transform=None)
+
+        alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, config['variation_recall'], config['character_idx_recall'], download=True,
+                                               transform=image_tfms, target_transform=None)
+
+        labels_study = sequence_study.core_label_sequence
+
+        main_pairs, _ = convert_sequence_to_images(alphabet=alphabet, sequence=labels_study, element='both',
+                                                       main_labels=labels_study)
+        main_pairs_flat = torch.flatten(main_pairs, start_dim=1)
+        single_characters = [alphabet_recall[a][0] for a in range(0, characters)]
+        single_characters = torch.stack(single_characters)
+
+        recall_data = single_characters.repeat(-(-batch_size // characters), 1, 1, 1)
+        recall_data = recall_data[0:batch_size]
+        recall_target = list(range(single_characters.size()[0]))
+        recall_target = recall_target * -(-batch_size // characters)
+        recall_paired_data = torch.cat([recall_data, torch.zeros_like(recall_data)], dim=3)
+        del recall_target[batch_size:len(recall_target)]
+        recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
+        _, recall_data = model(recall_data, recall_target, mode='extractor')
+        recall_data = recall_data['ltm']['memory']['output'].detach()
+
+        # Initialise metrics
+        oneshot_metrics = OneshotMetrics()
 
         for stm_epoch in range(config['train_epochs']):
 
-            sequence_study_tensor = torch.FloatTensor(sequence_study.sequence)
-            sequence_recall_tensor = torch.FloatTensor(sequence_recall.sequence)
-            study_loader = torch.utils.data.DataLoader(sequence_study_tensor, batch_size=batch_size, shuffle=False)
-            recall_loader = torch.utils.data.DataLoader(sequence_recall_tensor, batch_size=batch_size, shuffle=False)
 
-            pair_sequence_dataset = enumerate(zip(study_loader, recall_loader))
+            for idx, (study_set, validation_set) in pair_sequence_dataset:
 
-            # Load images from the selected alphabet from a specific writer or random writers
-            alphabet = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], idx_study, download=True,
-                                        transform=image_tfms, target_transform=None)
+                # Reset to saved model
+                model.reset()
 
-            alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, config.get('variation'), idx_recall, download=True,
-                                               transform=image_tfms, target_transform=None)
+                if learning_type == 'statistical':
+                    frequency = FrequencyPlotter(main_summary_dir, study_set, str(seed) + '_' + str(idx))
+                    frequency.create_bar()
 
-            if config['variation_training']:
-                second_alphabet = alphabet_recall
-            else:
-                second_alphabet = alphabet
+                study_paired_data, study_paired_target = convert_sequence_to_images(alphabet=alphabet,
+                                                                           sequence=study_set, element='both',
+                                                                            main_labels=labels_study)
 
-            labels_study = sequence_study.core_label_sequence
-            main_pairs, _ = convert_sequence_to_images(alphabet=alphabet, sequence=labels_study, element='both',
-                                                       main_labels=labels_study, second_alphabet=second_alphabet)
-            main_pairs_flat = torch.flatten(main_pairs, start_dim=1)
-            single_characters = [alphabet_recall[a][0] for a in range(0, characters)]
-            single_characters = torch.stack(single_characters)
-
-            # Initialise metrics
-            oneshot_metrics = OneshotMetrics()
-
-            for idx, (study_set, recall_set) in pair_sequence_dataset:
-
-                study_paired_data, study_paired_target = convert_sequence_to_images(alphabet=alphabet, second_alphabet=second_alphabet,
-                                                                       sequence=study_set, element='both',
+                study_data_A, study_target = convert_sequence_to_images(alphabet=alphabet,
+                                                                        sequence=study_set,
+                                                                        element='first',
                                                                         main_labels=labels_study)
-
-
-                study_data_A, study_target = convert_sequence_to_images(alphabet=second_alphabet,
-                                                                              sequence=study_set, element='first',
-                                                                              main_labels=labels_study)
                 study_target = torch.tensor(study_target, dtype=torch.long, device=device)
                 study_data_B, _ = convert_sequence_to_images(alphabet=alphabet,
-                                                                              sequence=study_set, element='second',
-                                                                              main_labels=labels_study)
-                _, study_data_A = model(study_data_A, study_target, mode='validate')
-                _, study_data_B = model(study_data_B, study_target, mode='validate')
+                                                             sequence=study_set,
+                                                             element='second',
+                                                             main_labels=labels_study)
+                _, study_data_A = model(study_data_A, study_target, mode='extractor')
+                _, study_data_B = model(study_data_B, study_target, mode='extractor')
                 study_data = config['activation_coefficient']*study_data_A['ltm']['memory']['output'].detach() + study_data_B['ltm']['memory']['output'].detach()
 
                 study_data = study_data.to(device)
                 study_target = study_target.to(device)
 
-                if single_recall:
-                    recall_data = single_characters.repeat(-(-batch_size//characters), 1, 1, 1)
-                    recall_data = recall_data[0:batch_size]
-                    recall_target = list(range(single_characters.size()[0]))
-                    recall_target = recall_target * -(-batch_size//characters)
-                    recall_data_blank = torch.zeros_like(recall_data)
-                    recall_paired_data = torch.cat([recall_data, recall_data_blank], dim=3)
 
-                    del recall_target[batch_size:len(recall_target)]
-                    recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
-                    _, recall_data = model(recall_data, recall_target, mode='validate')
-                    recall_data = recall_data['ltm']['memory']['output'].detach()
-                else:
-
-                    recall_data_A, recall_target = convert_sequence_to_images(alphabet=alphabet_recall,
-                                                                                sequence=recall_set, element='first',
+                val_paired_data, val_paired_target = convert_sequence_to_images(alphabet=alphabet_validation,
+                                                                                sequence=validation_set,
+                                                                                element='both',
                                                                                 main_labels=labels_study)
-                    recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
-                    recall_data_B, _ = convert_sequence_to_images(alphabet=alphabet_recall,
-                                                                     sequence=recall_set, element='second',
-                                                                     main_labels=labels_study)
-                    recall_paired_data = torch.cat([recall_data, recall_data_B], dim=3)
-                    _, recall_data_A = model(recall_data_A, recall_target, mode='validate')
-                    _, recall_data_B = model(recall_data_B, recall_target, mode='validate')
-                    recall_data = recall_data_A['ltm']['memory']['output'].detach() + recall_data_B['ltm']['memory'][
-                            'output'].detach()
 
-                recall_data = recall_data.to(device)
-                recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
-                recall_target = recall_target.to(device)
-
-                # Reset to saved model
-                model.reset()
+                val_data_A, val_target = convert_sequence_to_images(alphabet=alphabet_validation,
+                                                                    sequence=validation_set,
+                                                                    element='first',
+                                                                    main_labels=labels_study)
+                val_target = torch.tensor(val_target, dtype=torch.long, device=device)
+                val_data_B, _ = convert_sequence_to_images(alphabet=alphabet_validation,
+                                                           sequence=validation_set,
+                                                           element='second',
+                                                           main_labels=labels_study)
+                #recall_paired_data = torch.cat([recall_data, recall_data_B], dim=3)
+                _, val_data_A = model(val_data_A, val_target, mode='extractor')
+                _, val_data_B = model(val_data_B, val_target, mode='extractor')
+                val_data = val_data_A['ltm']['memory']['output'].detach() + val_data_B['ltm']['memory'][
+                    'output'].detach()
+                val_data = val_data.to(device)
+                val_target = val_target.to(device)
 
                 # Study
                 # --------------------------------------------------------------------------
                 for step in range(config['late_response_steps']):
 
-                    study_train_losses, _ = model(study_data, study_target, mode='study', ec_inputs=study_data,
-                                                      paired_inputs=study_paired_data)
-                    study_train_loss = study_train_losses['stm']['memory']['loss']
+                        study_train_losses, _ = model(study_data, study_target, mode='study', ec_inputs=study_data,
+                                                          paired_inputs=study_paired_data)
+                        study_train_loss = study_train_losses['stm']['memory']['loss']
 
-                    if hebbian:
-                        print('Losses batch {}, ite {}: \t EC_CA3:{:.6f}\
-                         \t ca3_ca1: {:.6f}'.format(idx, step,study_train_loss['ec_ca3'].item(),
-                                                    study_train_loss['ca3_ca1'].item()))
-                    else:
-                        print('Losses batch {}, ite {}: \t PR:{:.6f}\
-                        PR mismatch: {:.6f} \t ca3_ca1: {:.6f}'.format(idx, step,
-                                                                       study_train_loss['pr'].item(),
-                                                                       study_train_loss['pr_mismatch'].item(),
-                                                                       study_train_loss['ca3_ca1'].item()))
+                        if hebbian:
+                            print('Losses batch {}, ite {}: \t EC_CA3:{:.6f}\
+                             \t ca3_ca1: {:.6f}'.format(idx, step, study_train_loss['ec_ca3'].item(),
+                                                        study_train_loss['ca3_ca1'].item()))
+                        else:
+                            print('Losses batch {}, ite {}: \t PR:{:.6f}\
+                            PR mismatch: {:.6f} \t ca3_ca1: {:.6f}'.format(idx, step,
+                                                                           study_train_loss['pr'].item(),
+                                                                           study_train_loss['pr_mismatch'].item(),
+                                                                           study_train_loss['ca3_ca1'].item()))
 
-                    if step == (config['early_response_step']-1) or step == (config['late_response_steps']-1):
-                        with torch.no_grad():
-                            _, recall_outputs = model(recall_data, recall_target, mode='recall', ec_inputs=recall_data,
-                                                      paired_inputs=recall_paired_data)
-                            cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
-                            for component in components:
-                                #if component == 'ltm':
-                                #    recall_outputs_flat = torch.flatten(recall_outputs["ltm"]["memory"]["decoding"],
-                                #                                        start_dim=1)
-                                if component == 'dg':
-                                    recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component],
-                                                                    start_dim=1)
-                                if component == 'pr':
-                                    recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['pr_out'],
+                        validation_losses, _ = model(val_data, val_target, mode='validate', ec_inputs=val_data,
+                                                     paired_inputs=val_paired_data)
+
+                        if step == (config['early_response_step']-1) or step == (config['late_response_steps']-1):
+                            with torch.no_grad():
+                                _, recall_outputs = model(recall_data, recall_target, mode='recall', ec_inputs=recall_data,
+                                                          paired_inputs=recall_paired_data)
+                                cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
+                                for component in components:
+                                    #if component == 'ltm':
+                                    #    recall_outputs_flat = torch.flatten(recall_outputs["ltm"]["memory"]["decoding"],
+                                    #                                        start_dim=1)
+                                    if component == 'dg':
+                                        recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component],
                                                                         start_dim=1)
-                                if component == 'ec_ca3':
-                                    recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['ca3_cue'],
+                                    if component == 'pr':
+                                        recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['pr_out'],
+                                                                            start_dim=1)
+                                    if component == 'ec_ca3':
+                                        recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component]['ca3_cue'],
+                                                start_dim=1)
+                                    if component == 'ca3':
+                                        recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component],
+                                                                        start_dim=1)
+                                    if component == 'ca3_ca1':
+                                        recall_outputs_flat = torch.flatten(
+                                            recall_outputs["stm"]["memory"][component]['decoding'],
                                             start_dim=1)
-                                if component == 'ca3':
-                                    recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component],
-                                                                    start_dim=1)
-                                if component == 'ca3_ca1':
-                                    recall_outputs_flat = torch.flatten(
-                                        recall_outputs["stm"]["memory"][component]['decoding'],
-                                        start_dim=1)
-                                if component == 'ca1':
-                                    recall_outputs_flat = torch.flatten(
-                                        recall_outputs["stm"]["memory"][component]['decoding'],
-                                        start_dim=1)
-                                if component == 'recon_pair':
-                                    recall_outputs_flat = torch.flatten(
-                                        recall_outputs["stm"]["memory"]['decoding'],
-                                        start_dim=1)
-                                    similarity = [[cos(a, b) for b in main_pairs_flat.cpu()] for a in recall_outputs_flat.cpu()]
-                                    similarity_idx = [t.index(max(t)) for t in similarity]
-                                    predictions.extend([[labels_study[a] for a in similarity_idx]])
+                                    if component == 'ca1':
+                                        recall_outputs_flat = torch.flatten(
+                                            recall_outputs["stm"]["memory"][component]['decoding'],
+                                            start_dim=1)
+                                    if component == 'recon_pair':
+                                        recall_outputs_flat = torch.flatten(
+                                            recall_outputs["stm"]["memory"]['decoding'],
+                                            start_dim=1)
+                                        similarity = [[cos(a, b) for b in main_pairs_flat.cpu()] for a in recall_outputs_flat.cpu()]
+                                        similarity_idx = [t.index(max(t)) for t in similarity]
+                                        predictions.extend([[labels_study[a] for a in similarity_idx]])
 
-                                recall_outputs_flat = recall_outputs_flat[0:characters].cpu()
-                                pearson_r = [[stats.pearsonr(a, b)[0] for a in recall_outputs_flat] for b in
-                                             recall_outputs_flat]
-                                pearson_r = torch.tensor(pearson_r)
-                                pearson_r_tensor[component] = torch.cat((pearson_r_tensor[component], pearson_r[None, :, :]), 0)
+                                    recall_outputs_flat = recall_outputs_flat[0:characters].cpu()
+                                    pearson_r = [[stats.pearsonr(a, b)[0] for a in recall_outputs_flat] for b in
+                                                 recall_outputs_flat]
+                                    pearson_r = torch.tensor(pearson_r)
+                                    pearson_r_tensor[component] = torch.cat((pearson_r_tensor[component], pearson_r[None, :, :]), 0)
 
-                                if experiment == 'pairs_structure':
-                                    pearson_all_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.test_sequence])/len(sequence_study.test_sequence)
-                                    pearson_core_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.core_sequence]) / len(sequence_study.core_sequence)
-                                    tmp_pearson_test = torch.tensor([[pearson_core_pattern, pearson_all_pattern]])
-                                if experiment == 'associative_inference':
-                                    pearson_transitive_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.test_sequence]) / len(sequence_study.test_sequence)
-                                    pearson_direct_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.core_sequence]) / len(sequence_study.core_sequence)
-                                    pearson_base_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.base_sequence]) / len(sequence_study.base_sequence)
-                                    tmp_pearson_test = torch.tensor([[pearson_transitive_pattern - pearson_base_pattern, pearson_direct_pattern-pearson_base_pattern]])
-                                if experiment == 'community_structure':
-                                    pearson_within_internal = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[0]]) / len(sequence_study.graph_sequences[0])
-                                    pearson_within_boundary = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[1]]) / len(sequence_study.graph_sequences[1])
-                                    pearson_across_boundary = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[2]]) / len(sequence_study.graph_sequences[2])
-                                    pearson_across_other = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[3]]) / len(sequence_study.graph_sequences[3])
-                                    tmp_pearson_test = torch.tensor([[pearson_within_internal, pearson_within_boundary, pearson_across_boundary, pearson_across_other]])
+                                    if experiment == 'pairs_structure':
+                                        pearson_all_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.test_sequence])/len(sequence_study.test_sequence)
+                                        pearson_core_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.core_sequence]) / len(sequence_study.core_sequence)
+                                        tmp_pearson_test = torch.tensor([[pearson_core_pattern, pearson_all_pattern]])
+                                    if experiment == 'associative_inference':
+                                        pearson_transitive_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.test_sequence]) / len(sequence_study.test_sequence)
+                                        pearson_direct_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.core_sequence]) / len(sequence_study.core_sequence)
+                                        pearson_base_pattern = sum([pearson_r[i, j] for (i, j) in sequence_study.base_sequence]) / len(sequence_study.base_sequence)
+                                        tmp_pearson_test = torch.tensor([[pearson_transitive_pattern - pearson_base_pattern, pearson_direct_pattern-pearson_base_pattern]])
+                                    if experiment == 'community_structure':
+                                        pearson_within_internal = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[0]]) / len(sequence_study.graph_sequences[0])
+                                        pearson_within_boundary = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[1]]) / len(sequence_study.graph_sequences[1])
+                                        pearson_across_boundary = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[2]]) / len(sequence_study.graph_sequences[2])
+                                        pearson_across_other = sum([pearson_r[i, j] for (i, j) in sequence_study.graph_sequences[3]]) / len(sequence_study.graph_sequences[3])
+                                        tmp_pearson_test = torch.tensor([[pearson_within_internal, pearson_within_boundary, pearson_across_boundary, pearson_across_other]])
 
-                                pearson_r_test[component] = torch.cat((pearson_r_test[component], tmp_pearson_test), 0)
-
-
+                                    pearson_r_test[component] = torch.cat((pearson_r_test[component], tmp_pearson_test), 0)
 
                 pairs_inputs.extend([[(int(a[0]), int(a[1])) for a in study_set]])
+
 
                 # Recall
                 # --------------------------------------------------------------------------
@@ -394,58 +399,59 @@ def main():
                             primary_feature = utils.find_json_value(metrics_config['primary_feature_names'][i], model.features)
                             primary_label = utils.find_json_value(metrics_config['primary_label_names'][i], model.features)
                             secondary_feature = utils.find_json_value(metrics_config['secondary_feature_names'][i],
-                                                                      model.features)
+                                                                          model.features)
                             secondary_label = utils.find_json_value(metrics_config['secondary_label_names'][i], model.features)
                             comparison_type = metrics_config['comparison_types'][i]
                             prefix = metrics_config['prefixes'][i]
 
                             oneshot_metrics.compare(prefix,
-                                                    primary_feature, primary_label,
-                                                    secondary_feature, secondary_label,
-                                                    comparison_type=comparison_type)
+                                                        primary_feature, primary_label,
+                                                        secondary_feature, secondary_label,
+                                                        comparison_type=comparison_type)
 
-                    if hebbian:
-                        stm_feature = 'stm_ec_ca3'
-                    else:
-                        stm_feature = 'stm_pr'
+                        if hebbian:
+                            stm_feature = 'stm_ca3_cue'
+                        else:
+                            stm_feature = 'stm_pr'
 
-                    oneshot_metrics.compare(prefix='pr_rf_',
-                                             primary_features=model.features['recall'][stm_feature],
-                                             primary_labels=model.features['recall']['labels'],
-                                             secondary_features=model.features['study'][stm_feature],
-                                             secondary_labels=model.features['study']['labels'],
-                                             comparison_type='match_mse')
+                        oneshot_metrics.compare(prefix='pr_rf_',
+                                                 primary_features=model.features['recall'][stm_feature],
+                                                 primary_labels=model.features['recall']['labels'],
+                                                 secondary_features=model.features['study'][stm_feature],
+                                                 secondary_labels=model.features['study']['labels'],
+                                                 comparison_type='match_mse')
 
-                    oneshot_metrics.report()
+                        oneshot_metrics.report()
 
-                    summary_names = [
-                        'study_paired_inputs',
-                        'study_' + stm_feature,
-                        'study_stm_ca3',
+                        summary_names = [
+                            'study_paired_inputs',
+                            'study_' + stm_feature,
+                            'study_stm_ca3',
 
-                        'recall_paired_inputs',
-                        'recall_' + stm_feature,
-                        'recall_stm_ca3',
-                        'recall_stm_recon'
-                    ]
+                            'recall_paired_inputs',
+                            'recall_' + stm_feature,
+                            'recall_stm_ca3',
+                            'recall_stm_recon'
+                        ]
 
-                    summary_images = []
-                    for name in summary_names:
-                        mode_key, feature_key = name.split('_', 1)
+                        summary_images = []
+                        for name in summary_names:
+                            mode_key, feature_key = name.split('_', 1)
 
-                        summary_features = model.features[mode_key][feature_key]
-                        if len(summary_features.shape) > 2:
-                            summary_features = summary_features.permute(0, 2, 3, 1)
+                            summary_features = model.features[mode_key][feature_key]
+                            if len(summary_features.shape) > 2:
+                                summary_features = summary_features.permute(0, 2, 3, 1)
 
-                        summary_shape, _ = utils.square_image_shape_from_1d(np.prod(summary_features.data.shape[1:]))
-                        summary_shape[0] = summary_features.data.shape[0]
+                            summary_shape, _ = utils.square_image_shape_from_1d(np.prod(summary_features.data.shape[1:]))
+                            summary_shape[0] = summary_features.data.shape[0]
 
-                        summary_image = (name, summary_features, summary_shape)
-                        summary_images.append(summary_image)
+                            summary_image = (name, summary_features, summary_shape)
+                            summary_images.append(summary_image)
 
-                    utils.add_completion_summary(summary_images, summary_dir, idx, save_figs=True)
+                        utils.add_completion_summary(summary_images, summary_dir, str(idx) + '_' + str(seed), save_figs=True)
 
-# Save results
+
+        # Save results
         predictions_early = predictions[0:predictions.__len__():2]
         predictions_late = predictions[1:predictions.__len__():2]
 
@@ -509,9 +515,9 @@ def main():
     bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
     bars.create_bar()
 
-def convert_sequence_to_images(alphabet, sequence, main_labels, element='first', second_alphabet=None):
+def convert_sequence_to_images(alphabet, sequence, main_labels, element='first'):
     if element == 'both':
-        pairs_images = [torch.cat((second_alphabet[int(a[0])][0], alphabet[int(a[1])][0]), 2) for a in sequence]
+        pairs_images = [torch.cat((alphabet[int(a[0])][0], alphabet[int(a[1])][0]), 2) for a in sequence]
     if element == 'first':
         pairs_images = [alphabet[int(a[0])][0] for a in sequence]
     if element == 'second':
