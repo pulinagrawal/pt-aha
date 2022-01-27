@@ -27,12 +27,13 @@ from oneshot_metrics import OneshotMetrics
 LOG_EVERY = 20
 LOG_EVERY_EVAL = 1
 VAL_EVERY = 20
+VALIDATE = True
 SAVE_EVERY = 1
 MAX_VAL_STEPS = 100
 MAX_PRETRAIN_STEPS = -1
 VAL_SPLIT = 0.175
 SAVE_RUN_MODEL = False
-
+LOAD_LTM_ONLY = False
 
 def main():
   parser = argparse.ArgumentParser(description='Complementary Learning System: One-shot Learning Experiments')
@@ -163,7 +164,7 @@ def main():
             epoch, batch_idx, len(train_loader),
             100. * batch_idx / len(train_loader), pretrain_loss))
 
-        if batch_idx % VAL_EVERY == 0 or batch_idx == len(train_loader) - 1:
+        if VALIDATE and ((batch_idx + 1) % VAL_EVERY == 0 or (batch_idx + 1) == len(train_loader)):
           logging.info("\t--- Start validation")
 
 
@@ -270,6 +271,10 @@ def main():
     model_dict = model.state_dict()
     pretrained_dict = torch.load(pretrained_model_path)
     pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+
+    if LOAD_LTM_ONLY:
+      pretrained_dict = {k: v for k, v in pretrained_dict.items() if k.startswith('ltm')}
+
     model_dict.update(pretrained_dict)
     model.load_state_dict(pretrained_dict)
 

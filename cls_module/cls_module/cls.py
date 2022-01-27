@@ -28,7 +28,6 @@ class CLS(nn.Module):
 
   def __init__(self, input_shape, config, device=None, writer=None, output_shape=None):
     super(CLS, self).__init__()
-
     self.config = config
     self.writer = writer
     self.device = device
@@ -63,6 +62,8 @@ class CLS(nn.Module):
 
     if ltm_type == 'vc':
       ltm_class = ltm.VisualComponent
+    elif ltm_type == 'vc_bvae':
+      ltm_class = ltm.VisualComponentBVAE
     elif ltm_type == 'vgg':
       ltm_class = ltm.VGG
     else:
@@ -397,6 +398,8 @@ class CLS(nn.Module):
     ltm_type = self.config['ltm_type']
     if ltm_type == 'vc':
       return False
+    if ltm_type == 'vc_bvae':
+      return False  
     elif ltm_type == 'vgg':
       return True
     else:
