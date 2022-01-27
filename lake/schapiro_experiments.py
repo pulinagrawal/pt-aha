@@ -211,7 +211,6 @@ def main():
         study_loader = torch.utils.data.DataLoader(sequence_study_tensor, batch_size=batch_size, shuffle=False)
         validation_loader = torch.utils.data.DataLoader(sequence_validation_tensor, batch_size=batch_size, shuffle=False)
 
-        pair_sequence_dataset = enumerate(zip(study_loader, validation_loader))
 
         # Load images from the selected alphabet from a specific writer or random writers
         alphabet = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], config['character_idx_study'], download=True,
@@ -245,9 +244,13 @@ def main():
         oneshot_metrics = OneshotMetrics()
 
         for stm_epoch in range(config['train_epochs']):
+
+            pair_sequence_dataset = enumerate(zip(study_loader, validation_loader))
+
+
             for idx, (study_set, validation_set) in pair_sequence_dataset:
 
-                # Reset to saved model
+                # Reset
                 model.reset()
 
                 if learning_type == 'statistical':
@@ -383,7 +386,6 @@ def main():
                 pairs_inputs.extend([[(int(a[0]), int(a[1])) for a in study_set]])
 
 
-                # Recall
                 # --------------------------------------------------------------------------
                 with torch.no_grad():
 
@@ -446,23 +448,22 @@ def main():
                             summary_image = (name, summary_features, summary_shape)
                             summary_images.append(summary_image)
 
-                        utils.add_completion_summary(summary_images, summary_dir, str(idx) + '_' + str(seed), save_figs=True)
-
+                        utils.add_completion_summary(summary_images, summary_dir, str(idx) + '_' + str(stm_epoch) + '_'
+                                                     + str(seed), save_figs=True)
 
         # Save results
         predictions_early = predictions[0:predictions.__len__():2]
         predictions_late = predictions[1:predictions.__len__():2]
 
-        with open(main_summary_dir + '/predictions_early' + str(stm_epoch) + '_' + str(seed) + '.csv', 'w', encoding='UTF8') as f:
+        with open(main_summary_dir + '/predictions_early_' + str(seed) + '.csv', 'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
             writer_file.writerows(predictions_early)
 
-        with open(main_summary_dir + '/predictions_late' + str(stm_epoch) + '_' + str(seed)+'.csv', 'w', encoding='UTF8') as f:
+        with open(main_summary_dir + '/predictions_late_' + '_' + str(seed)+'.csv', 'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
             writer_file.writerows(predictions_late)
 
-        with open(main_summary_dir + '/pair_inputs' + str(stm_epoch) + '_' + str(
-                    seed) + '.csv', 'w', encoding='UTF8') as f:
+        with open(main_summary_dir + '/pair_inputs_'+ str(seed) + '.csv', 'w', encoding='UTF8') as f:
             writer_file = csv.writer(f)
             writer_file.writerows(pairs_inputs)
 
