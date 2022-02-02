@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from cerenaut_pt_core import utils
 
 from cls_module.memory.interface import MemoryInterface
+from cls_module.memory.stm.aha.interest_filter import InterestFilter
 from cerenaut_pt_core.components.sparse_autoencoder import SparseAutoencoder
 
 
@@ -32,6 +33,8 @@ class VisualComponent(MemoryInterface):
       sample_output = self.prepare_encoding(sample_output)
       self.output_shape = list(sample_output.data.shape)
       self.output_shape[0] = -1
+
+    self.interest = InterestFilter()
 
     if 'classifier' in self.config:
       self.build_classifier(input_shape=self.output_shape)
@@ -66,7 +69,7 @@ class VisualComponent(MemoryInterface):
       loss.backward()
       self.vc_optimizer.step()
 
-    output_encoding = self.prepare_encoding(encoding)
+    output_encoding = self.prepare_encoding(encoding, inputs)
 
     outputs = {
         'encoding': encoding,
@@ -82,9 +85,13 @@ class VisualComponent(MemoryInterface):
 
     return loss, outputs
 
-  def prepare_encoding(self, encoding):
+  def prepare_encoding(self, encoding, inputs=None):
     """Postprocessing for the VC encoding."""
     encoding = encoding.detach()
+
+    if self.config.get('interst_filter', None) and inputs is not None:
+      print('using interest filter')
+      _, encoding = self.interest(inputs, encoding)
 
     if self.config['output_pool_size'] > 1:
       encoding, self.pool_indices = F.max_pool2d(
