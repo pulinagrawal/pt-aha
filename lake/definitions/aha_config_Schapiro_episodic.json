@@ -1,5 +1,5 @@
 {
-  "pretrained_model_path": "./runs/pairs_structure/episodic/20220112-234052/6517/",
+  "pretrained_model_path": "./runs/associative_inference/static/20220131-140733/1150/",
   "experiment_name": "associative_inference",
   "learning_type": "static",
   "communities": 3,
@@ -7,18 +7,18 @@
   "sequence_length": 60,
   "study_batch_size": 60,
 
-  "seeds": 50,
+  "seeds": 5,
   "train_epochs": 1,
-  "activation_coefficient": 1,
-  "late_response_steps": 30,
-  "early_response_step": 20,
+  "activation_coefficient": 0.7,
+  "late_response_steps": 60,
+  "early_response_step": 25,
 
-  "alphabet": "N_Ko_2",
+  "alphabet": "N_Ko_filter",
   "variation_recall": false,
   "variation_training": false,
-  "character_idx_study": 3,
-  "character_idx_validation": 4,
-  "character_idx_recall": 3,
+  "writer_idx_study": 1,
+  "writer_idx_validation": 7,
+  "writer_idx_recall": 1,
 
   "pretrain_epochs": 4,
   "pretrain_batch_size": 150,
@@ -93,7 +93,7 @@
     },
     "perforant_pr": {
         "learning_rate": 0.01,
-        "weight_decay": 0.000004,
+        "weight_decay": 0.00004,
 
         "num_units": 800,
         "input_dropout": 0.25,
