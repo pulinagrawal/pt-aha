@@ -15,7 +15,7 @@ from cls_module.cls import CLS
 from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph, SequenceGeneratorTriads
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
-from Visualisations import HeatmapPlotter, BarPlotter
+#from Visualisations import HeatmapPlotter, BarPlotter
 from Visualisations import FrequencyPlotter
 from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
@@ -61,9 +61,9 @@ def main():
     experiment_time = now.strftime("%Y%m%d-%H%M%S")
 
     if experiment not in ["pairs_structure", "community_structure", "associative_inference"]:
-        experiment = "pairs_structure"
-        print("Experiment NOT specified. Must be pairs_structure, community_structure or associative_inference "
-              "Set to pairs_structure by default.")
+        print("Experiment NOT specified. Must be pairs_structure, community_structure or associative_inference ")
+        exit()
+
 
     main_summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time,
                                              main_folder=True)
@@ -77,8 +77,6 @@ def main():
         transforms.ToTensor(),
         OmniglotTransformation(resize_factor=config['image_resize_factor'])])
 
-    image_shape = config['image_shape']
-    final_shape = config['pairs_shape']
     alphabet_name = config.get('alphabet')
     pretrained_model_path = config.get('pretrained_model_path', None)
     pearson_r_test = torch.zeros((1, 2))
@@ -101,7 +99,7 @@ def main():
         if pretrained_model_path:
             # summary_dir = pretrained_model_path
              #writer = SummaryWriter(log_dir=summary_dir)
-            model = CLS(image_shape, config, device=device, writer=writer, output_shape=final_shape).to(device)
+            model = CLS(config['image_shape'], config, device=device, writer=writer, output_shape=config['pairs_shape']).to(device)
 
             model_path = os.path.join(pretrained_model_path, 'pretrained_model_*')
             print(model_path)
@@ -170,7 +168,7 @@ def main():
                                 target = target.to(device)
 
                                 val_losses, _ = model(val_data, labels=val_target if model.is_ltm_supervised() else None,
-                                                      mode='validate')
+                                                      mode='validate_ltm')
                                 val_pretrain_loss = val_losses['ltm']['memory']['loss'].item()
 
                                 if batch_idx_val % LOG_EVERY == 0:
@@ -213,13 +211,13 @@ def main():
 
 
         # Load images from the selected alphabet from a specific writer or random writers
-        alphabet = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], config['character_idx_study'], download=True,
+        alphabet = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], config['writer_idx_study'], download=True,
                                         transform=image_tfms, target_transform=None)
 
-        alphabet_validation = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], config['character_idx_validation'], download=True,
+        alphabet_validation = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], config['writer_idx_validation'], download=True,
                                                transform=image_tfms, target_transform=None)
 
-        alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, config['variation_recall'], config['character_idx_recall'], download=True,
+        alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, config['variation_recall'], config['writer_idx_recall'], download=True,
                                                transform=image_tfms, target_transform=None)
 
         labels_study = sequence_study.core_label_sequence
@@ -239,6 +237,20 @@ def main():
         recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
         _, recall_data = model(recall_data, recall_target, mode='extractor')
         recall_data = recall_data['ltm']['memory']['output'].detach()
+
+        correlation_recall = torch.flatten(recall_data[0:characters], start_dim=1)
+
+        correlation_recall = [[stats.pearsonr(a, b)[0] for a in correlation_recall] for b in
+                              correlation_recall]
+        correlation_recall = torch.tensor(correlation_recall).numpy()
+
+        import imageio
+        imageio.imwrite(main_summary_dir + '/correlation_single_characters.jpg', correlation_recall)
+
+
+        with open(main_summary_dir + '/correlation_single_characters.csv', 'w', encoding='UTF8') as f:
+            writer_file = csv.writer(f)
+            writer_file.writerows(correlation_recall)
 
         # Initialise metrics
         oneshot_metrics = OneshotMetrics()
@@ -272,7 +284,17 @@ def main():
                                                              main_labels=labels_study)
                 _, study_data_A = model(study_data_A, study_target, mode='extractor')
                 _, study_data_B = model(study_data_B, study_target, mode='extractor')
+
+                #Option 1
                 study_data = config['activation_coefficient']*study_data_A['ltm']['memory']['output'].detach() + study_data_B['ltm']['memory']['output'].detach()
+
+                #Option 2
+                # leave equal overlaps as they are, no adding. Different overlaps with the mean. No overlaps they keep their value for B and decrease 0.7 for A.
+
+                #Option 2
+
+                # leave equal overlaps as they are, no adding. Different overlaps with the minimun. No overlaps they keep their value for B and decrease 0.7 for A.
+
 
                 study_data = study_data.to(device)
                 study_target = study_target.to(device)
@@ -505,14 +527,14 @@ def main():
             writer_file = csv.writer(f)
             writer_file.writerows(pearson_r_late[a].numpy())
 
-    for a in pearson_r_early.keys():
-         heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
-         heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
-         heatmap_early.create_heatmap()
-         heatmap_late.create_heatmap()
-
-    bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
-    bars.create_bar()
+    # for a in pearson_r_early.keys():
+    #      heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
+    #      heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
+    #      heatmap_early.create_heatmap()
+    #      heatmap_late.create_heatmap()
+    #
+    # bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
+    # bars.create_bar()
 
 def convert_sequence_to_images(alphabet, sequence, main_labels, element='first'):
     if element == 'both':
