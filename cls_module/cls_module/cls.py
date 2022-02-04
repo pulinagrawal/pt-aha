@@ -10,9 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchvision
-
 import numpy as np
-
 import cls_module
 from cerenaut_pt_core.utils import square_image_shape_from_1d
 from .memory import ltm, stm, ec
@@ -263,6 +261,9 @@ class CLS(nn.Module):
   def extract(self, inputs, labels):
     return self.forward(inputs, labels, mode='extractor')
 
+  def validate_ltm(self, inputs, labels):
+    return self.forward(inputs, labels, mode='validate_ltm')
+
   def validate(self, inputs, labels):
     return self.forward(inputs, labels, mode='validate')
 
@@ -296,7 +297,7 @@ class CLS(nn.Module):
       self.freeze([self.ltm_key + '.classifier', self.stm_key])
 
     # Freeze ALL except LTM feature extractor during validation
-    elif mode in ['extractor', 'validate', 'recall']:
+    elif mode in ['extractor', 'validate_ltm', 'validate', 'recall']:
       self.eval()
 
     # Freeze LTM during memorisation
@@ -376,19 +377,20 @@ class CLS(nn.Module):
 
     # Add summaries to TensorBoard
     if self.writer:
-      summary_step = self.step[mode]
+      if mode != 'extractor':
+        summary_step = self.step[mode]
 
-      self.write_loss_summary(self.writer, losses, mode, summary_step)
-      self.write_accuracy_summary(self.writer, accuracies, mode, summary_step)
-      self.write_output_summaries(self.writer, outputs, mode, summary_step)
+        self.write_loss_summary(self.writer, losses, mode, summary_step)
+        self.write_accuracy_summary(self.writer, accuracies, mode, summary_step)
+        self.write_output_summaries(self.writer, outputs, mode, summary_step)
 
-      if mode not in ['study', 'recall', 'validate']:
-        self.writer.add_image(mode + '/inputs', torchvision.utils.make_grid(inputs), summary_step)
+        if mode not in ['study', 'recall', 'validate']:
+          self.writer.add_image(mode + '/inputs', torchvision.utils.make_grid(inputs), summary_step)
 
-      if paired_inputs is not None:
-        self.writer.add_image(mode + '/paired_inputs', torchvision.utils.make_grid(paired_inputs), summary_step)
+        if paired_inputs is not None:
+          self.writer.add_image(mode + '/paired_inputs', torchvision.utils.make_grid(paired_inputs), summary_step)
 
-      self.writer.flush()
+        self.writer.flush()
 
     self.step[mode] += 1
 
@@ -406,7 +408,7 @@ class CLS(nn.Module):
       return False
 
   def write_loss_summary(self, writer, losses, mode, summary_step):
-    if mode is not 'recall':
+    if mode != 'recall' and mode != 'extractor':
       for module_name in losses:
         for submodule_name in losses[module_name]:
           for metric_key, metric_value in losses[module_name][submodule_name].items():
