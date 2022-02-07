@@ -15,7 +15,7 @@ from cls_module.cls import CLS
 from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph, SequenceGeneratorTriads
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
-#from Visualisations import HeatmapPlotter, BarPlotter
+from Visualisations import HeatmapPlotter, BarPlotter
 from Visualisations import FrequencyPlotter
 from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
@@ -369,9 +369,13 @@ def main():
                                         recall_outputs_flat = torch.flatten(
                                             recall_outputs["stm"]["memory"][component]['decoding'],
                                             start_dim=1)
-                                    if component == 'ca1':
+                                    if component == 'ca1_enc':
                                         recall_outputs_flat = torch.flatten(
-                                            recall_outputs["stm"]["memory"][component]['decoding'],
+                                          recall_outputs["stm"]["memory"]['ca1']['encoding'],
+                                          start_dim=1)
+                                    if component == 'ca1_dec':
+                                        recall_outputs_flat = torch.flatten(
+                                            recall_outputs["stm"]["memory"]['ca1']['decoding'],
                                             start_dim=1)
                                     if component == 'recon_pair':
                                         recall_outputs_flat = torch.flatten(
@@ -527,14 +531,14 @@ def main():
             writer_file = csv.writer(f)
             writer_file.writerows(pearson_r_late[a].numpy())
 
-    # for a in pearson_r_early.keys():
-    #      heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
-    #      heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
-    #      heatmap_early.create_heatmap()
-    #      heatmap_late.create_heatmap()
-    #
-    # bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
-    # bars.create_bar()
+    for a in pearson_r_early.keys():
+         heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
+         heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
+         heatmap_early.create_heatmap()
+         heatmap_late.create_heatmap()
+    
+    bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
+    bars.create_bar()
 
 def convert_sequence_to_images(alphabet, sequence, main_labels, element='first'):
     if element == 'both':
