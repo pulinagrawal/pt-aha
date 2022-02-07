@@ -199,7 +199,7 @@ def main():
             sequence_validation = SequenceGeneratorGraph(characters, length, learning_type, config['communities'])
         elif experiment == "associative_inference":
             sequence_study = SequenceGeneratorTriads(characters, length, learning_type)
-            sequence_validation = SequenceGeneratorTriads(characters, length, learning_type)Code
+            sequence_validation = SequenceGeneratorTriads(characters, length, learning_type)
 
         predictions = []
         pairs_inputs = []
