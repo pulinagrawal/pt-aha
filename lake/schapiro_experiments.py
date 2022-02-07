@@ -198,8 +198,8 @@ def main():
             sequence_study = SequenceGeneratorGraph(characters, length, learning_type, config['communities'])
             sequence_validation = SequenceGeneratorGraph(characters, length, learning_type, config['communities'])
         elif experiment == "associative_inference":
-            sequence_study = SequenceGeneratorTriads(characters, length, learning_type, batch_size)
-            sequence_validation = SequenceGeneratorTriads(characters, length, learning_type, batch_size)
+            sequence_study = SequenceGeneratorTriads(characters, length, learning_type)
+            sequence_validation = SequenceGeneratorTriads(characters, length, learning_type)Code
 
         predictions = []
         pairs_inputs = []
@@ -285,16 +285,14 @@ def main():
                 _, study_data_A = model(study_data_A, study_target, mode='extractor')
                 _, study_data_B = model(study_data_B, study_target, mode='extractor')
 
-                #Option 1
-                study_data = config['activation_coefficient']*study_data_A['ltm']['memory']['output'].detach() + study_data_B['ltm']['memory']['output'].detach()
+                study_data = torch.empty(study_data_A['ltm']['memory']['output'].size(), dtype=torch.float32)
 
-                #Option 2
-                # leave equal overlaps as they are, no adding. Different overlaps with the mean. No overlaps they keep their value for B and decrease 0.7 for A.
-
-                #Option 2
-
-                # leave equal overlaps as they are, no adding. Different overlaps with the minimun. No overlaps they keep their value for B and decrease 0.7 for A.
-
+                for i in range(study_data_A['ltm']['memory']['output'].size(0)):
+                    study_data_A_i = study_data_A['ltm']['memory']['output'].detach()[i]
+                    study_data_B_i = study_data_B['ltm']['memory']['output'].detach()[i]
+                    study_data_i = overlap(study_data_A_i, study_data_B_i, config['activation_coefficient'],
+                                           config['overlap_option'])
+                    study_data[i] = study_data_i
 
                 study_data = study_data.to(device)
                 study_target = study_target.to(device)
@@ -550,6 +548,30 @@ def convert_sequence_to_images(alphabet, sequence, main_labels, element='first')
 
     return pairs_images, labels
 
+def overlap(A, B, coefficient, option):
+    if option == 'add':
+        study_data = coefficient*A + B
+                    # study_data_B['ltm']['memory']['output'].detach()
+    else:
+        # leave equal overlaps as they are, no adding. Different overlaps with the mean. No overlaps they keep their value for B and decrease 0.7 for A.
+        A_tmp = torch.flatten(A, start_dim=0)
+        B_tmp = torch.flatten(B, start_dim=0)
+
+        study_data = torch.empty(A_tmp.size(0), dtype=torch.float32)
+        for i in range(A_tmp.size(0)):
+            if A_tmp[i] == B_tmp[i]:
+                study_data[i] = A_tmp[i]
+            if A_tmp[i] != B_tmp[i] and A_tmp[i] != 0 and B_tmp[i] != 0:
+                if option == 'mean':
+                    study_data[i] = torch.mean(torch.stack([A_tmp[i], B_tmp[i]]))
+                if option == 'minimum':
+                    study_data[i] = torch.min(torch.stack([A_tmp[i], B_tmp[i]]))
+            if A_tmp[i] != B_tmp[i] and A_tmp[i] == 0:
+                study_data[i] = B_tmp[i]
+            if A_tmp[i] != B_tmp[i] and B_tmp[i] == 0:
+                study_data[i] = coefficient*A_tmp[i]
+    study_data = torch.reshape(study_data, A.size())
+    return study_data
 
 if __name__ == '__main__':
     main()
