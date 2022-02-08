@@ -346,11 +346,12 @@ def main():
                                                           paired_inputs=recall_paired_data)
 
                                 # Perform another iteration using recalled outputs
-                                if config['stm'].get('bigloop_recurrence', False):
-                                  bigloop_ec_inputs = recall_outputs["stm"]["memory"]['ca1']['decoding']
-                                  bigloop_paired_inputs = recall_outputs["stm"]["memory"]['decoding']
-                                  _, recall_outputs = model(bigloop_ec_inputs, recall_target, mode='recall', ec_inputs=bigloop_ec_inputs,
-                                                            paired_inputs=bigloop_paired_inputs)
+                                if config.get('recurrence_steps', 0) > 0:
+                                  for rstep in range(config['recurrence_steps']):
+                                    bigloop_ec_inputs = recall_outputs["stm"]["memory"]['ca1']['decoding']
+                                    bigloop_paired_inputs = recall_outputs["stm"]["memory"]['decoding']
+                                    _, recall_outputs = model(bigloop_ec_inputs, recall_target, mode='recall', ec_inputs=bigloop_ec_inputs,
+                                                              paired_inputs=bigloop_paired_inputs)
 
                                 cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
                                 for component in components:
