@@ -1,34 +1,34 @@
 {
-  "pretrained_model_path": "./runs/pairs_structure/episodic/20211223-101155/1732",
-  "experiment_name": "associative_inference",
-  "learning_type": "recurrence",
+  "pretrained_model_path": "./runs/associative_inference/static/20220131-140733/1150/",
+  "experiment_name": "pairs_structure",
+  "learning_type": "statistical",
   "communities": 3,
-  "characters": 9,
-  "sequence_length": 72,
-  "study_batch_size": 72,
+  "characters": 8,
+  "sequence_length": 80,
+  "study_batch_size": 80,
+  "overlap_option":"mean",
 
-  "seeds": 2,
-  "train_epochs": 2,
-  "test_single_characters": true,
+  "seeds": 10,
+  "train_epochs": 1,
   "activation_coefficient": 0.9,
-  "settled_response_steps": 200,
-  "initial_response_step": 20,
+  "late_response_steps": 60,
+  "early_response_step": 25,
 
-  "alphabet": "Latin",
-  "variation": false,
-  "character_idx_study": 2,
-  "character_idx_recall": 8,
+  "alphabet": "N_Ko_filter_2",
+  "variation_recall": false,
   "variation_training": false,
+  "writer_idx_study": 1,
+  "writer_idx_validation": 7,
+  "writer_idx_recall": 1,
 
-  "pretrain_epochs": 5,
+  "pretrain_epochs": 4,
   "pretrain_batch_size": 150,
   "image_resize_factor": 0.5,
   "image_shape": [1, 1, 52, 52],
   "pairs_shape": [1, 1, 52, 104],
 
 
-  "test_components": ["dg", "ca3", "pr", "ca3_ca1", "ca1", "final"],
-
+  "test_components": ["dg", "pr", "ca3", "ca3_ca1", "ca1_enc", "ca1_dec", "recon_pair"],
   "ltm_type": "vc",
   "stm_type": "aha",
 
@@ -44,10 +44,10 @@
     "learning_rate": 0.01,
     "weight_decay": 0.00004,
 
-    "input_dropout": 0.25,
+    "input_dropout": 0.0,
 
-    "num_layers": 1,
-    "units": [800],
+    "num_layers": 2,
+    "units": [100, 100],
 
     "norm_inputs": true
   },
@@ -58,7 +58,7 @@
     "kernel_size": 10,
 
     "stride": 5,
-    "eval_stride": 5,
+    "eval_stride": 1,
     "encoder_padding": "same",
     "decoder_padding": "same",
 
@@ -94,7 +94,7 @@
     },
     "perforant_pr": {
         "learning_rate": 0.01,
-        "weight_decay": 0.000025,
+        "weight_decay": 0.00004,
 
         "num_units": 800,
         "input_dropout": 0.25,

@@ -27,7 +27,7 @@
   "pairs_shape": [1, 1, 52, 104],
 
 
-  "test_components": ["dg", "ca3", "ec_ca3", "ca3_ca1", "ca1", "recon_pair"],
+  "test_components": ["dg", "ca3", "ec_ca3", "ca3_ca1", "ca1_enc", "ca1_dec", "recon_pair"],
 
   "ltm_type": "vc",
   "stm_type": "aha",
