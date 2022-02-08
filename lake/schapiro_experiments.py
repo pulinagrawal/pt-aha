@@ -15,7 +15,7 @@ from cls_module.cls import CLS
 from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph, SequenceGeneratorTriads
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
-#from Visualisations import HeatmapPlotter, BarPlotter
+from Visualisations import HeatmapPlotter, BarPlotter
 from Visualisations import FrequencyPlotter
 from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
@@ -25,7 +25,7 @@ hebbian = False
 
 LOG_EVERY = 20
 LOG_EVERY_EVAL = 1
-VAL_EVERY = 20
+VAL_EVERY = 2
 SAVE_EVERY = 1
 MAX_VAL_STEPS = 100
 MAX_PRETRAIN_STEPS = -1
@@ -116,7 +116,7 @@ def main():
         else:
             start_epoch = 1
             utils.set_seed(seed_ltm)
-            model = CLS(image_shape, config, device=device, writer=writer, output_shape=final_shape).to(device)
+            model = CLS(config['image_shape'], config, device=device, writer=writer, output_shape=config['pairs_shape']).to(device)
 
             dataset = OmniglotAlphabet('./data', alphabet_name, False, writer_idx='any', download=True,
                                        transform=image_tfms,
@@ -132,14 +132,10 @@ def main():
 
             # Pre-train the model
             for epoch in range(start_epoch, config['pretrain_epochs'] + 1):
-
                 for batch_idx, (data, target) in enumerate(train_loader):
-
                     if 0 < MAX_PRETRAIN_STEPS < batch_idx:
                         print("Pretrain steps, {}, has exceeded max of {}.".format(batch_idx, MAX_PRETRAIN_STEPS))
                         break
-                    labels = list(set(target))
-                    target = torch.tensor([labels.index(value) for value in target])
 
                     data = data.to(device)
                     target = target.to(device)
@@ -152,29 +148,29 @@ def main():
                             epoch, batch_idx, len(train_loader),
                             100. * batch_idx / len(train_loader), pretrain_loss))
 
-                    if batch_idx % VAL_EVERY == 0 or batch_idx == len(train_loader) - 1:
-                        logging.info("\t--- Start validation")
+                if (epoch + 1) % VAL_EVERY == 0:
+                    logging.info("\t--- Start validation")
 
-                        with torch.no_grad():
-                            for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
+                    with torch.no_grad():
+                        for batch_idx_val, (val_data, val_target) in enumerate(val_loader):
 
-                                if batch_idx_val >= MAX_VAL_STEPS:
-                                    print("\tval batch steps, {}, has exceeded max of {}.".format(batch_idx_val,
-                                                                                                  MAX_VAL_STEPS))
-                                    break
+                            if batch_idx_val >= MAX_VAL_STEPS:
+                                print("\tval batch steps, {}, has exceeded max of {}.".format(batch_idx_val,
+                                                                                              MAX_VAL_STEPS))
+                                break
 
 
-                                val_data = val_data.to(device)
-                                target = target.to(device)
+                            val_data = val_data.to(device)
+                            val_target = val_target.to(device)
 
-                                val_losses, _ = model(val_data, labels=val_target if model.is_ltm_supervised() else None,
-                                                      mode='validate_ltm')
-                                val_pretrain_loss = val_losses['ltm']['memory']['loss'].item()
+                            val_losses, _ = model(val_data, labels=val_target if model.is_ltm_supervised() else None,
+                                                  mode='validate_ltm')
+                            val_pretrain_loss = val_losses['ltm']['memory']['loss'].item()
 
-                                if batch_idx_val % LOG_EVERY == 0:
-                                    print('\tValidation for Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                                        epoch, batch_idx_val, len(val_loader),
-                                        100. * batch_idx_val / len(val_loader), val_pretrain_loss))
+                            if batch_idx_val % LOG_EVERY == 0:
+                                print('\tValidation for Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                                    epoch, batch_idx_val, len(val_loader),
+                                    100. * batch_idx_val / len(val_loader), val_pretrain_loss))
 
                 if epoch % SAVE_EVERY == 0:
                     trained_model_path = os.path.join(summary_dir, 'pretrained_model_' + str(epoch) + '.pt')
@@ -199,7 +195,7 @@ def main():
             sequence_validation = SequenceGeneratorGraph(characters, length, learning_type, config['communities'])
         elif experiment == "associative_inference":
             sequence_study = SequenceGeneratorTriads(characters, length, learning_type)
-            sequence_validation = SequenceGeneratorTriads(characters, length, learning_type)Code
+            sequence_validation = SequenceGeneratorTriads(characters, length, learning_type)
 
         predictions = []
         pairs_inputs = []
@@ -285,18 +281,20 @@ def main():
                 _, study_data_A = model(study_data_A, study_target, mode='extractor')
                 _, study_data_B = model(study_data_B, study_target, mode='extractor')
 
-                study_data = torch.empty(study_data_A['ltm']['memory']['output'].size(), dtype=torch.float32)
+                if config['overlap_option'] == 'add':
+                  study_data = config['activation_coefficient'] * study_data_A['ltm']['memory']['output'].detach() + study_data_B['ltm']['memory']['output'].detach()
+                else:
+                  study_data = torch.empty(study_data_A['ltm']['memory']['output'].size(), dtype=torch.float32)
 
-                for i in range(study_data_A['ltm']['memory']['output'].size(0)):
-                    study_data_A_i = study_data_A['ltm']['memory']['output'].detach()[i]
-                    study_data_B_i = study_data_B['ltm']['memory']['output'].detach()[i]
-                    study_data_i = overlap(study_data_A_i, study_data_B_i, config['activation_coefficient'],
-                                           config['overlap_option'])
-                    study_data[i] = study_data_i
+                  for i in range(study_data_A['ltm']['memory']['output'].size(0)):
+                      study_data_A_i = study_data_A['ltm']['memory']['output'].detach()[i]
+                      study_data_B_i = study_data_B['ltm']['memory']['output'].detach()[i]
+                      study_data_i = overlap(study_data_A_i, study_data_B_i, config['activation_coefficient'],
+                                            config['overlap_option'])
+                      study_data[i] = study_data_i
 
                 study_data = study_data.to(device)
                 study_target = study_target.to(device)
-
 
                 val_paired_data, val_paired_target = convert_sequence_to_images(alphabet=alphabet_validation,
                                                                                 sequence=validation_set,
@@ -346,6 +344,15 @@ def main():
                             with torch.no_grad():
                                 _, recall_outputs = model(recall_data, recall_target, mode='recall', ec_inputs=recall_data,
                                                           paired_inputs=recall_paired_data)
+
+                                # Perform another iteration using recalled outputs
+                                if config.get('recurrence_steps', 0) > 0:
+                                  for rstep in range(config['recurrence_steps']):
+                                    bigloop_ec_inputs = recall_outputs["stm"]["memory"]['ca1']['decoding']
+                                    bigloop_paired_inputs = recall_outputs["stm"]["memory"]['decoding']
+                                    _, recall_outputs = model(bigloop_ec_inputs, recall_target, mode='recall', ec_inputs=bigloop_ec_inputs,
+                                                              paired_inputs=bigloop_paired_inputs)
+
                                 cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
                                 for component in components:
                                     #if component == 'ltm':
@@ -367,9 +374,13 @@ def main():
                                         recall_outputs_flat = torch.flatten(
                                             recall_outputs["stm"]["memory"][component]['decoding'],
                                             start_dim=1)
-                                    if component == 'ca1':
+                                    if component == 'ca1_enc':
                                         recall_outputs_flat = torch.flatten(
-                                            recall_outputs["stm"]["memory"][component]['decoding'],
+                                          recall_outputs["stm"]["memory"]['ca1']['encoding'],
+                                          start_dim=1)
+                                    if component == 'ca1_dec':
+                                        recall_outputs_flat = torch.flatten(
+                                            recall_outputs["stm"]["memory"]['ca1']['decoding'],
                                             start_dim=1)
                                     if component == 'recon_pair':
                                         recall_outputs_flat = torch.flatten(
@@ -525,14 +536,14 @@ def main():
             writer_file = csv.writer(f)
             writer_file.writerows(pearson_r_late[a].numpy())
 
-    # for a in pearson_r_early.keys():
-    #      heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
-    #      heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
-    #      heatmap_early.create_heatmap()
-    #      heatmap_late.create_heatmap()
-    #
-    # bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
-    # bars.create_bar()
+    for a in pearson_r_early.keys():
+         heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
+         heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
+         heatmap_early.create_heatmap()
+         heatmap_late.create_heatmap()
+    
+    bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
+    bars.create_bar()
 
 def convert_sequence_to_images(alphabet, sequence, main_labels, element='first'):
     if element == 'both':
@@ -549,27 +560,23 @@ def convert_sequence_to_images(alphabet, sequence, main_labels, element='first')
     return pairs_images, labels
 
 def overlap(A, B, coefficient, option):
-    if option == 'add':
-        study_data = coefficient*A + B
-                    # study_data_B['ltm']['memory']['output'].detach()
-    else:
-        # leave equal overlaps as they are, no adding. Different overlaps with the mean. No overlaps they keep their value for B and decrease 0.7 for A.
-        A_tmp = torch.flatten(A, start_dim=0)
-        B_tmp = torch.flatten(B, start_dim=0)
+    # leave equal overlaps as they are, no adding. Different overlaps with the mean. No overlaps they keep their value for B and decrease 0.7 for A.
+    A_tmp = torch.flatten(A, start_dim=0)
+    B_tmp = torch.flatten(B, start_dim=0)
 
-        study_data = torch.empty(A_tmp.size(0), dtype=torch.float32)
-        for i in range(A_tmp.size(0)):
-            if A_tmp[i] == B_tmp[i]:
-                study_data[i] = A_tmp[i]
-            if A_tmp[i] != B_tmp[i] and A_tmp[i] != 0 and B_tmp[i] != 0:
-                if option == 'mean':
-                    study_data[i] = torch.mean(torch.stack([A_tmp[i], B_tmp[i]]))
-                if option == 'minimum':
-                    study_data[i] = torch.min(torch.stack([A_tmp[i], B_tmp[i]]))
-            if A_tmp[i] != B_tmp[i] and A_tmp[i] == 0:
-                study_data[i] = B_tmp[i]
-            if A_tmp[i] != B_tmp[i] and B_tmp[i] == 0:
-                study_data[i] = coefficient*A_tmp[i]
+    study_data = torch.empty(A_tmp.size(0), dtype=torch.float32)
+    for i in range(A_tmp.size(0)):
+        if A_tmp[i] == B_tmp[i]:
+            study_data[i] = A_tmp[i]
+        if A_tmp[i] != B_tmp[i] and A_tmp[i] != 0 and B_tmp[i] != 0:
+            if option == 'mean':
+                study_data[i] = torch.mean(torch.stack([A_tmp[i], B_tmp[i]]))
+            if option == 'minimum':
+                study_data[i] = torch.min(torch.stack([A_tmp[i], B_tmp[i]]))
+        if A_tmp[i] != B_tmp[i] and A_tmp[i] == 0:
+            study_data[i] = B_tmp[i]
+        if A_tmp[i] != B_tmp[i] and B_tmp[i] == 0:
+            study_data[i] = coefficient*A_tmp[i]
     study_data = torch.reshape(study_data, A.size())
     return study_data
 
