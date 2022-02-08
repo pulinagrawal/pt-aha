@@ -10,7 +10,6 @@ import collections
 
 
 class HeatmapPlotter:
-
     def __init__(self, path, component):
         self.path = path
         self.component = component
@@ -39,10 +38,10 @@ class HeatmapPlotter:
         ax.set_title(self.component)
         figure = r_heatmap.get_figure()
         figure.savefig(os.path.join(self.path, self.component + '.png'), dpi=300)
+        plt.close()
 
 
 class BarPlotter:
-
     def __init__(self, path, components):
         self.path = path
         self.components = components
@@ -59,7 +58,6 @@ class BarPlotter:
         return data
 
     def create_bar(self):
-
         df = pd.DataFrame({'A': [], 'B': [], 'C': []})
 
         if 'pairs_structure' in self.path:
@@ -118,16 +116,15 @@ class BarPlotter:
         plt.ylabel("Mean correlation between \npatterns after training")
         figure = bar_plot.get_figure()
         figure.savefig(os.path.join(self.path, 'bar.png'), dpi=300)
+        plt.close()
 
 class FrequencyPlotter:
-
     def __init__(self, path, sequence, seed_batch):
         self.path = path
         self.sequence = sequence.tolist()
         self.seed_batch = seed_batch
 
     def create_bar(self):
-
         plt.clf()
         characters = [list(string.ascii_uppercase)[int(a)] + list(string.ascii_uppercase)[int(b)] for [a, b] in self.sequence]
         frequency = collections.Counter(characters)
@@ -137,26 +134,28 @@ class FrequencyPlotter:
         plt.yticks(y, y)
         plt.grid(axis='y')
         plt.savefig(os.path.join(self.path, 'frequency_' + self.seed_batch + '.png'), dpi=300)
+        plt.close()
 
+# Note: this ensures that following code does not run when this file imported.
+# Instead, the code will only run when the script is executed directly.
+if __name__ == '__main__':
+  #experiment = 'associative_inference'
+  experiment = 'pairs_structure'
+  #experiment = 'community_structure'
+  #type = 'recurrence'
+  type = 'statistical'
+  #type = 'episodic'
+  #type = 'static'
+  date = '20220207-104818'
+  components = ["dg", "ca3", "pr", "ca3_ca1", "ca1", "recon_pair"]
+  #components = ["dg", "ca3", "ec_ca3", "ca3_ca1", "ca1", "recon_pair"]
+  path = '/Users/karina/PycharmProjects/pt-aha/lake/runs/'
 
-# #experiment = 'associative_inference'
-# experiment = 'pairs_structure'
-# #experiment = 'community_structure'
-# #type = 'recurrence'
-# type = 'statistical'
-# #type = 'episodic'
-# #type = 'static'
-# date = '20220207-104818'
-# components = ["dg", "ca3", "pr", "ca3_ca1", "ca1", "recon_pair"]
-# #components = ["dg", "ca3", "ec_ca3", "ca3_ca1", "ca1", "recon_pair"]
-# path = '/Users/karina/PycharmProjects/pt-aha/lake/runs/'
+  bars = BarPlotter(os.path.join(path, experiment, type, date, 'predictions'), components)
+  bars.create_bar()
 
-
-# bars = BarPlotter(os.path.join(path, experiment, type, date, 'predictions'), components)
-# bars.create_bar()
-
-# for a in components:
-#             heatmap_initial = HeatmapPlotter(os.path.join(path, experiment, type, date, 'predictions'), "pearson_early_" + a)
-#             heatmap_settled = HeatmapPlotter(os.path.join(path, experiment, type, date, 'predictions'), "pearson_late_" + a)
-#             heatmap_initial.create_heatmap()
-#             heatmap_settled.create_heatmap()
+  for a in components:
+              heatmap_initial = HeatmapPlotter(os.path.join(path, experiment, type, date, 'predictions'), "pearson_early_" + a)
+              heatmap_settled = HeatmapPlotter(os.path.join(path, experiment, type, date, 'predictions'), "pearson_late_" + a)
+              heatmap_initial.create_heatmap()
+              heatmap_settled.create_heatmap()
