@@ -38,7 +38,7 @@ def main():
         parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_Schapiro_hebb.json',
                         help='Configuration file for experiments.')
     else:
-        parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_Schapiro_episodic.json',
+        parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_Schapiro.json',
                         help='Configuration file for experiments.')
 
     parser.add_argument('-l', '--logging', nargs="?", type=str, default='warning',
@@ -541,7 +541,7 @@ def main():
          heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
          heatmap_early.create_heatmap()
          heatmap_late.create_heatmap()
-    
+
     bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
     bars.create_bar()
 
