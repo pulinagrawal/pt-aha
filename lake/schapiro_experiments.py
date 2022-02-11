@@ -15,12 +15,8 @@ from cls_module.cls import CLS
 from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph, SequenceGeneratorTriads
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
-<<<<<<< HEAD
-#from Visualisations import HeatmapPlotter, BarPlotter
 from embeddings import Correlations, Overlap
-=======
 from Visualisations import HeatmapPlotter, BarPlotter
->>>>>>> origin/main
 from Visualisations import FrequencyPlotter
 from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
