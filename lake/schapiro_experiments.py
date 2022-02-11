@@ -16,6 +16,7 @@ from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGrap
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
 #from Visualisations import HeatmapPlotter, BarPlotter
+from embeddings import Correlations, Overlap
 from Visualisations import FrequencyPlotter
 from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
@@ -63,7 +64,6 @@ def main():
     if experiment not in ["pairs_structure", "community_structure", "associative_inference"]:
         print("Experiment NOT specified. Must be pairs_structure, community_structure or associative_inference ")
         exit()
-
 
     main_summary_dir = utils.get_summary_dir(experiment + "/" + learning_type, experiment_time,
                                              main_folder=True)
@@ -198,8 +198,8 @@ def main():
             sequence_study = SequenceGeneratorGraph(characters, length, learning_type, config['communities'])
             sequence_validation = SequenceGeneratorGraph(characters, length, learning_type, config['communities'])
         elif experiment == "associative_inference":
-            sequence_study = SequenceGeneratorTriads(characters, length, learning_type)
-            sequence_validation = SequenceGeneratorTriads(characters, length, learning_type)Code
+            sequence_study = SequenceGeneratorTriads(characters, length, learning_type, batch_size)
+            sequence_validation = SequenceGeneratorTriads(characters, length, learning_type, batch_size)
 
         predictions = []
         pairs_inputs = []
@@ -222,35 +222,33 @@ def main():
 
         labels_study = sequence_study.core_label_sequence
 
-        main_pairs, _ = convert_sequence_to_images(alphabet=alphabet, sequence=labels_study, element='both',
-                                                       main_labels=labels_study)
-        main_pairs_flat = torch.flatten(main_pairs, start_dim=1)
+        main_pairs, _, main_pairs_paired = format_data(alphabet, labels_study, labels_study, model, device,
+                                              config['activation_coefficient'],
+                                              config['overlap_option'])
+        main_pairs_paired_flat = torch.flatten(main_pairs_paired, start_dim=1)
+
+
         single_characters = [alphabet_recall[a][0] for a in range(0, characters)]
         single_characters = torch.stack(single_characters)
 
+
+        # Recall data size must be the batch size
         recall_data = single_characters.repeat(-(-batch_size // characters), 1, 1, 1)
         recall_data = recall_data[0:batch_size]
+        recall_paired_data = torch.cat([recall_data, torch.zeros_like(recall_data)], dim=3)
+
         recall_target = list(range(single_characters.size()[0]))
         recall_target = recall_target * -(-batch_size // characters)
-        recall_paired_data = torch.cat([recall_data, torch.zeros_like(recall_data)], dim=3)
-        del recall_target[batch_size:len(recall_target)]
+        recall_target = recall_target[0:batch_size]
         recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
+
         _, recall_data = model(recall_data, recall_target, mode='extractor')
         recall_data = recall_data['ltm']['memory']['output'].detach()
 
-        correlation_recall = torch.flatten(recall_data[0:characters], start_dim=1)
-
-        correlation_recall = [[stats.pearsonr(a, b)[0] for a in correlation_recall] for b in
-                              correlation_recall]
-        correlation_recall = torch.tensor(correlation_recall).numpy()
-
-        import imageio
-        imageio.imwrite(main_summary_dir + '/correlation_single_characters.jpg', correlation_recall)
-
-
-        with open(main_summary_dir + '/correlation_single_characters.csv', 'w', encoding='UTF8') as f:
-            writer_file = csv.writer(f)
-            writer_file.writerows(correlation_recall)
+        correlator = Correlations(main_summary_dir, seed)
+        correlator.correlation(recall_data[0:characters], recall_data[0:characters], 'single_characters')
+        correlator.correlation(recall_data[0:characters], main_pairs, 'main_pairs_vs_characters')
+        correlator.correlation(main_pairs, main_pairs, 'main_pairs')
 
         # Initialise metrics
         oneshot_metrics = OneshotMetrics()
@@ -269,54 +267,16 @@ def main():
                     frequency = FrequencyPlotter(main_summary_dir, study_set, str(seed) + '_' + str(idx))
                     frequency.create_bar()
 
-                study_paired_data, study_paired_target = convert_sequence_to_images(alphabet=alphabet,
-                                                                           sequence=study_set, element='both',
-                                                                            main_labels=labels_study)
-
-                study_data_A, study_target = convert_sequence_to_images(alphabet=alphabet,
-                                                                        sequence=study_set,
-                                                                        element='first',
-                                                                        main_labels=labels_study)
-                study_target = torch.tensor(study_target, dtype=torch.long, device=device)
-                study_data_B, _ = convert_sequence_to_images(alphabet=alphabet,
-                                                             sequence=study_set,
-                                                             element='second',
-                                                             main_labels=labels_study)
-                _, study_data_A = model(study_data_A, study_target, mode='extractor')
-                _, study_data_B = model(study_data_B, study_target, mode='extractor')
-
-                study_data = torch.empty(study_data_A['ltm']['memory']['output'].size(), dtype=torch.float32)
-
-                for i in range(study_data_A['ltm']['memory']['output'].size(0)):
-                    study_data_A_i = study_data_A['ltm']['memory']['output'].detach()[i]
-                    study_data_B_i = study_data_B['ltm']['memory']['output'].detach()[i]
-                    study_data_i = overlap(study_data_A_i, study_data_B_i, config['activation_coefficient'],
-                                           config['overlap_option'])
-                    study_data[i] = study_data_i
+                study_data, study_target, study_paired_data = format_data(alphabet, study_set, labels_study, model, device,
+                                                                          config['activation_coefficient'],
+                                                                          config['overlap_option'])
 
                 study_data = study_data.to(device)
                 study_target = study_target.to(device)
 
-
-                val_paired_data, val_paired_target = convert_sequence_to_images(alphabet=alphabet_validation,
-                                                                                sequence=validation_set,
-                                                                                element='both',
-                                                                                main_labels=labels_study)
-
-                val_data_A, val_target = convert_sequence_to_images(alphabet=alphabet_validation,
-                                                                    sequence=validation_set,
-                                                                    element='first',
-                                                                    main_labels=labels_study)
-                val_target = torch.tensor(val_target, dtype=torch.long, device=device)
-                val_data_B, _ = convert_sequence_to_images(alphabet=alphabet_validation,
-                                                           sequence=validation_set,
-                                                           element='second',
-                                                           main_labels=labels_study)
-                #recall_paired_data = torch.cat([recall_data, recall_data_B], dim=3)
-                _, val_data_A = model(val_data_A, val_target, mode='extractor')
-                _, val_data_B = model(val_data_B, val_target, mode='extractor')
-                val_data = val_data_A['ltm']['memory']['output'].detach() + val_data_B['ltm']['memory'][
-                    'output'].detach()
+                val_data, val_target, val_paired_data = format_data(alphabet_validation, validation_set, labels_study, model, device,
+                                                                          config['activation_coefficient'],
+                                                                          config['overlap_option'])
                 val_data = val_data.to(device)
                 val_target = val_target.to(device)
 
@@ -348,9 +308,6 @@ def main():
                                                           paired_inputs=recall_paired_data)
                                 cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
                                 for component in components:
-                                    #if component == 'ltm':
-                                    #    recall_outputs_flat = torch.flatten(recall_outputs["ltm"]["memory"]["decoding"],
-                                    #                                        start_dim=1)
                                     if component == 'dg':
                                         recall_outputs_flat = torch.flatten(recall_outputs["stm"]["memory"][component],
                                                                         start_dim=1)
@@ -371,11 +328,13 @@ def main():
                                         recall_outputs_flat = torch.flatten(
                                             recall_outputs["stm"]["memory"][component]['decoding'],
                                             start_dim=1)
+                                        if experiment == "associative_inference" and step == (config['late_response_steps']-1):
+                                            correlator.transitivity(recall_outputs_flat[0:characters], recall_data[0:characters])
                                     if component == 'recon_pair':
                                         recall_outputs_flat = torch.flatten(
                                             recall_outputs["stm"]["memory"]['decoding'],
                                             start_dim=1)
-                                        similarity = [[cos(a, b) for b in main_pairs_flat.cpu()] for a in recall_outputs_flat.cpu()]
+                                        similarity = [[cos(a, b) for b in main_pairs_paired_flat.cpu()] for a in recall_outputs_flat.cpu()]
                                         similarity_idx = [t.index(max(t)) for t in similarity]
                                         predictions.extend([[labels_study[a] for a in similarity_idx]])
 
@@ -548,30 +507,33 @@ def convert_sequence_to_images(alphabet, sequence, main_labels, element='first')
 
     return pairs_images, labels
 
-def overlap(A, B, coefficient, option):
-    if option == 'add':
-        study_data = coefficient*A + B
-                    # study_data_B['ltm']['memory']['output'].detach()
-    else:
-        # leave equal overlaps as they are, no adding. Different overlaps with the mean. No overlaps they keep their value for B and decrease 0.7 for A.
-        A_tmp = torch.flatten(A, start_dim=0)
-        B_tmp = torch.flatten(B, start_dim=0)
+def format_data(alphabet, data, labels, model,device, coefficient, option):
+    paired_data, paired_target = convert_sequence_to_images(alphabet=alphabet,
+                                                                        sequence=data, element='both',
+                                                                        main_labels=labels)
 
-        study_data = torch.empty(A_tmp.size(0), dtype=torch.float32)
-        for i in range(A_tmp.size(0)):
-            if A_tmp[i] == B_tmp[i]:
-                study_data[i] = A_tmp[i]
-            if A_tmp[i] != B_tmp[i] and A_tmp[i] != 0 and B_tmp[i] != 0:
-                if option == 'mean':
-                    study_data[i] = torch.mean(torch.stack([A_tmp[i], B_tmp[i]]))
-                if option == 'minimum':
-                    study_data[i] = torch.min(torch.stack([A_tmp[i], B_tmp[i]]))
-            if A_tmp[i] != B_tmp[i] and A_tmp[i] == 0:
-                study_data[i] = B_tmp[i]
-            if A_tmp[i] != B_tmp[i] and B_tmp[i] == 0:
-                study_data[i] = coefficient*A_tmp[i]
-    study_data = torch.reshape(study_data, A.size())
-    return study_data
+    data_A, target = convert_sequence_to_images(alphabet=alphabet,
+                                                            sequence=data,
+                                                            element='first',
+                                                            main_labels=labels)
+    data_B, _ = convert_sequence_to_images(alphabet=alphabet,
+                                                 sequence=data,
+                                                 element='second',
+                                                 main_labels=labels)
+    target = torch.tensor(target, dtype=torch.long, device=device)
+    _, data_A = model(data_A, target, mode='extractor')
+    _, data_B = model(data_B, target, mode='extractor')
+
+    data = torch.empty(data_A['ltm']['memory']['output'].size(), dtype=torch.float32)
+
+    for i in range(data_A['ltm']['memory']['output'].size(0)):
+        data_A_i = data_A['ltm']['memory']['output'].detach()[i]
+        data_B_i = data_B['ltm']['memory']['output'].detach()[i]
+        embedder = Overlap(coefficient, option)
+        data_i = embedder.join(data_A_i, data_B_i)
+        data[i] = data_i
+
+    return data, target, paired_data
 
 if __name__ == '__main__':
     main()
