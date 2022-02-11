@@ -7,7 +7,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-from cerenaut_pt_core.utils import build_topk_mask
 from cerenaut_pt_core.components.simple_autoencoder import SimpleAutoencoder
 
 
@@ -101,20 +100,31 @@ class MonosynapticPathway(nn.Module):
 
     with torch.no_grad():
       _, post_ca1_outputs = self.forward_ca1(inputs=ec_inputs, targets=ec_inputs, training=False)
-      ca3_ca1_target = post_ca1_outputs['encoding']
+      ca3_ca1_target = post_ca1_outputs['encoding'].flatten(start_dim=1)
 
     ca3_ca1_loss, ca3_ca1_outputs = self.forward_ca3_ca1(inputs=ca3_inputs, targets=ca3_ca1_target)
 
-    # During recall, the CA3:CA1 will drive CA1 reconstruction
+    # During recall, the CA3:CA1 will have influence on CA1 outputs
     if not self.training and self.config['ca1']['ca3_recall']:
-      ca1_hidden_recon = ca3_ca1_outputs['decoding']
-      ca1_decoding = self.ca1.decode(ca1_hidden_recon)
+      ca1_encoding_recon = ca3_ca1_outputs['decoding']
+      ca1_encoding_tmp = self.ca1.encode(ec_inputs)
+
+      recall_mode = self.config['ca1'].get('ca3_recall_mode', 'ca3_only')
+
+      if recall_mode == 'ca3_only':
+        ca1_encoding = ca1_encoding_recon
+      elif recall_mode == 'add':
+        ca1_encoding = ca1_encoding_recon + ca1_encoding_tmp
+      elif recall_mode == 'max':
+        ca1_encoding = torch.max(ca1_encoding_recon, ca1_encoding_tmp)
+
+      ca1_decoding = self.ca1.decode(ca1_encoding)
       ca1_loss = F.mse_loss(ca1_decoding, ec_inputs)
 
       ca1_outputs = {
-        'encoding': None,
+        'encoding': ca1_encoding,
         'decoding': ca1_decoding,
-        'output': None
+        'output': ca1_encoding
       }
 
     return ca1_loss, ca1_outputs, ca3_ca1_loss, ca3_ca1_outputs
