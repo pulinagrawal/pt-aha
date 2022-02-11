@@ -1,7 +1,6 @@
 """Complementary Learning System module."""
 
 import os
-import collections
 import logging
 from typing import OrderedDict
 
