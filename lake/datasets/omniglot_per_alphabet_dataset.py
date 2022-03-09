@@ -14,11 +14,12 @@ class OmniglotAlphabet(Dataset):
         'images_background': '68d2efa1b9178cc56df9314c21c6e718'
     }
 
-    def __init__(self, root, alphabet, use_alphabet, variation=False, writer_idx=1,
+    def __init__(self, root, alphabet, use_alphabet, own_alphabet=False, variation=False, writer_idx=1,
                  transform=None, target_transform=None, download=False):
         self.root = root
-        self.alphabet = alphabet # The alphabet of interest.
-        self.use_alphabet = use_alphabet # Indicates wheather to only use this alphabet or use the rest of the alphabets.
+        self.alphabet = alphabet  # The alphabet of interest.
+        self.own_alphabet = own_alphabet
+        self.use_alphabet = use_alphabet  # Indicates wheather to only use this alphabet or use the rest of the alphabets.
         self.variation = variation
         self.writer_idx = writer_idx
         self.transform = transform
@@ -79,11 +80,14 @@ class OmniglotAlphabet(Dataset):
 
         return image, character_class
 
-    def _check_integrity(self)  :
-        zip_filename = self._get_target_folder()
-        if not check_integrity(join(self.root, zip_filename + '.zip'), self.zips_md5[zip_filename]):
-            return False
-        return True
+    def _check_integrity(self):
+        if not self.own_alphabet:
+            zip_filename = self._get_target_folder()
+            if not check_integrity(join(self.root, zip_filename + '.zip'), self.zips_md5[zip_filename]):
+                return False
+            return True
+        else:
+            return True
 
     def download(self):
         if self._check_integrity():
@@ -97,6 +101,9 @@ class OmniglotAlphabet(Dataset):
 
 
     def _get_target_folder(self):
-        return 'images_background'
+        if self.own_alphabet:
+            return 'own_alphabets'
+        else:
+            return 'images_background'
 
 

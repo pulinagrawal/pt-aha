@@ -61,6 +61,19 @@ def main():
     now = datetime.datetime.now()
     experiment_time = now.strftime("%Y%m%d-%H%M%S")
 
+    if config['own_alphabet']:
+        variation_recall = False
+        variation_training = False
+        writer_idx_study = 0
+        writer_idx_validation = 0
+        writer_idx_recall = 0
+    else:
+        variation_recall = config['variation_recall']
+        variation_training = config['variation_training']
+        writer_idx_study = config['writer_idx_study']
+        writer_idx_validation = config['writer_idx_validation']
+        writer_idx_recall = config['writer_idx_recall']
+
     if experiment not in ["pairs_structure", "community_structure", "associative_inference"]:
         print("Experiment NOT specified. Must be pairs_structure, community_structure or associative_inference ")
         exit()
@@ -118,7 +131,8 @@ def main():
             utils.set_seed(seed_ltm)
             model = CLS(config['image_shape'], config, device=device, writer=writer, output_shape=config['pairs_shape']).to(device)
 
-            dataset = OmniglotAlphabet('./data', alphabet_name, False, writer_idx='any', download=True,
+            dataset = OmniglotAlphabet('./data', alphabet_name, False, own_alphabet=config['own_alphabet'],
+                                       download=True,
                                        transform=image_tfms,
                                        target_transform=None)
 
@@ -207,14 +221,23 @@ def main():
 
 
         # Load images from the selected alphabet from a specific writer or random writers
-        alphabet = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], config['writer_idx_study'], download=True,
-                                        transform=image_tfms, target_transform=None)
+        alphabet = OmniglotAlphabet('./data', alphabet_name, True,
+                                    own_alphabet=config['own_alphabet'],
+                                    variation=variation_training,
+                                    writer_idx=writer_idx_study, download=True,
+                                    transform=image_tfms, target_transform=None)
 
-        alphabet_validation = OmniglotAlphabet('./data', alphabet_name, True, config['variation_training'], config['writer_idx_validation'], download=True,
+        alphabet_validation = OmniglotAlphabet('./data', alphabet_name, True,
+                                               own_alphabet=config['own_alphabet'],
+                                               variation=variation_training,
+                                               writer_idx=writer_idx_validation, download=True,
                                                transform=image_tfms, target_transform=None)
 
-        alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True, config['variation_recall'], config['writer_idx_recall'], download=True,
-                                               transform=image_tfms, target_transform=None)
+        alphabet_recall = OmniglotAlphabet('./data', alphabet_name, True,
+                                           own_alphabet=config['own_alphabet'],
+                                           variation=variation_recall,
+                                           writer_idx=writer_idx_recall, download=True,
+                                           transform=image_tfms, target_transform=None)
 
         labels_study = sequence_study.core_label_sequence
 
@@ -493,14 +516,14 @@ def main():
             writer_file = csv.writer(f)
             writer_file.writerows(pearson_r_late[a].numpy())
 
-    for a in pearson_r_early.keys():
-         heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
-         heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
-         heatmap_early.create_heatmap()
-         heatmap_late.create_heatmap()
-
-    bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
-    bars.create_bar()
+    # for a in pearson_r_early.keys():
+    #      heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
+    #      heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
+    #      heatmap_early.create_heatmap()
+    #      heatmap_late.create_heatmap()
+    #
+    # bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
+    # bars.create_bar()
 
 def convert_sequence_to_images(alphabet, sequence, main_labels, element='first'):
     if element == 'both':

@@ -79,12 +79,13 @@ be CD. """
 
 class SequenceGeneratorGraph:
 
-    def __init__(self, characters, seq_length, type, community):
-        self.characters = int(characters / community)
-        self.community = community
-        self.type = type
+    def __init__(self, characters, seq_length, experiment_type, communities):
+        self.characters = characters
+        self.community_size = int(characters / communities)
+        self.communities = communities
+        self.type = experiment_type
         self.length = seq_length
-        self.all_pairs = [(a, b) for a in range(0, self.characters) for b in range(0, self.characters)]
+        self.all_pairs = [(a, b) for a in range(0, self.community_size) for b in range(0, self.community_size)]
         self.core_label_sequence, self.graph_sequences = self._create_label_sequence()
         self.sequence = self._create_sequence()
 
@@ -94,10 +95,10 @@ class SequenceGeneratorGraph:
         within_internal = []
         within_boundary = []
         across_boundary = []
-        for i in range(0, self.community * self.characters, self.characters):
-            for a in range(i + 1, i + self.characters):
-                if a == i + self.characters - 1:
-                    if a == self.community * self.characters - 1:
+        for i in range(0, self.characters, self.community_size):
+            for a in range(i + 1, i + self.community_size):
+                if a == i + self.community_size - 1:
+                    if a == self.communities * self.community_size - 1:
                         edges = edges + [(a, 0), (0, a)]
                         across_boundary = across_boundary + [(a, 0), (0, a)]
                     else:
@@ -106,10 +107,10 @@ class SequenceGeneratorGraph:
                 else:
                     edges = edges + [(i, a), (a, i)]
                     within_internal = within_internal + [(i, a), (a, i)]
-                for b in range(a + 1, i + self.characters):
+                for b in range(a + 1, i + self.community_size):
                     edges = edges + [(a, b), (b, a)]
                     within_internal = within_internal + [(a, b), (b, a)]
-            within_boundary = within_boundary + [(i, i + self.characters - 1), (i + self.characters - 1, i)]
+            within_boundary = within_boundary + [(i, i + self.community_size - 1), (i + self.community_size - 1, i)]
         across_other = [a for a in self.all_pairs if a not in within_internal + within_boundary + across_boundary]
 
         return edges, [within_internal, within_boundary, across_boundary, across_other]
