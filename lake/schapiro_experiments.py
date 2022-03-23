@@ -330,6 +330,8 @@ def main():
                             with torch.no_grad():
                                 recall_data = recall_data.to(device)
                                 recall_target = recall_target.to(device)
+                                recall_paired_data = recall_paired_data.to(device)
+
                                 _, recall_outputs = model(recall_data, recall_target, mode='recall', ec_inputs=recall_data,
                                                           paired_inputs=recall_paired_data)
 
