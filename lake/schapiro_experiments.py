@@ -516,14 +516,14 @@ def main():
             writer_file = csv.writer(f)
             writer_file.writerows(pearson_r_late[a].numpy())
 
-    # for a in pearson_r_early.keys():
-    #      heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
-    #      heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
-    #      heatmap_early.create_heatmap()
-    #      heatmap_late.create_heatmap()
-    #
-    # bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
-    # bars.create_bar()
+    for a in pearson_r_early.keys():
+         heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
+         heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
+         heatmap_early.create_heatmap()
+         heatmap_late.create_heatmap()
+
+    bars = BarPlotter(main_summary_dir, pearson_r_early.keys())
+    bars.create_bar()
 
 def convert_sequence_to_images(alphabet, sequence, main_labels, element='first'):
     if element == 'both':
