@@ -261,8 +261,11 @@ def main():
         recall_target = recall_target[0:batch_size]
         recall_target = torch.tensor(recall_target, dtype=torch.long, device=device)
 
+        recall_data = recall_data.to(device)
+        recall_target = recall_target.to(device)
+
         _, recall_data = model(recall_data, recall_target, mode='extractor')
-        recall_data = recall_data['ltm']['memory']['output'].detach()
+        recall_data = recall_data['ltm']['memory']['output'].detach().cpu()
 
         correlator = Correlations(main_summary_dir, seed)
         correlator.correlation(recall_data[0:characters], recall_data[0:characters], 'single_characters')
@@ -292,12 +295,14 @@ def main():
 
                 study_data = study_data.to(device)
                 study_target = study_target.to(device)
+                study_paired_data = study_paired_data.to(device)
 
                 val_data, val_target, val_paired_data = format_data(alphabet_validation, validation_set, labels_study, model, device,
                                                                           config['activation_coefficient'],
                                                                           config['overlap_option'])
                 val_data = val_data.to(device)
                 val_target = val_target.to(device)
+                val_paired_data = val_paired_data.to(device)
 
                 # Study
                 # --------------------------------------------------------------------------
@@ -323,6 +328,8 @@ def main():
 
                         if step == (config['early_response_step']-1) or step == (config['late_response_steps']-1):
                             with torch.no_grad():
+                                recall_data = recall_data.to(device)
+                                recall_target = recall_target.to(device)
                                 _, recall_outputs = model(recall_data, recall_target, mode='recall', ec_inputs=recall_data,
                                                           paired_inputs=recall_paired_data)
 
@@ -553,6 +560,10 @@ def format_data(alphabet, data, labels, model,device, coefficient, option):
                                                  element='second',
                                                  main_labels=labels)
     target = torch.tensor(target, dtype=torch.long, device=device)
+
+    data_A = data_A.to(device)
+    data_B = data_B.to(device)
+
     _, data_A = model(data_A, target, mode='extractor')
     _, data_B = model(data_B, target, mode='extractor')
 
