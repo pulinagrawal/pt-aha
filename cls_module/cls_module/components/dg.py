@@ -19,7 +19,7 @@ class DG(nn.Module):
     self.config = config
 
     self.input_shape = list(input_shape)
-    self.input_size = np.prod(self.input_shape[1:])
+    self.input_size = np.prod(self.input_shape[1:]) # flattened size without batch dimension
 
     self.layer = nn.Linear(self.input_size, self.config['num_units'], bias=False)
     self.layer.weight.requires_grad = False
@@ -27,11 +27,14 @@ class DG(nn.Module):
     self.reset_parameters()
 
   def reset_parameters(self):
-    """Custom initialization *does* make a big difference to orthogonality, even with inhibition"""
-    input_area = self.input_size
+    """
+    Does custom initialization of weights such that for each output unit the sum of weights is 1.
+    Also ensures that only very few weights (specified by 'knockout_rate' in config) are non-zero.
+    Custom initialization *does* make a big difference to orthogonality, even with inhibition."""
+    
     hidden_size = self.config['num_units']
 
-    num_weights = hidden_size * input_area
+    num_weights = hidden_size * self.input_size
     random_values = torch.rand(num_weights, dtype=torch.float32)
 
     knockout_rate = self.config['knockout_rate']
@@ -42,13 +45,14 @@ class DG(nn.Module):
                                     p=[knockout_rate, keep_rate])
 
     initial_values = random_values * initial_mask * self.config['init_scale']
-    initial_values = torch.reshape(initial_values, shape=(hidden_size, input_area))
+    initial_values = torch.reshape(initial_values, shape=(hidden_size, self.input_size))
 
+    # ensures weights of each unit sum to 1
     abs_sum = torch.sum(torch.abs(initial_values), dim=1, keepdim=True)
     norm = 1.0 / abs_sum
 
     initial_values = initial_values * norm
-
+    # ? can result in nan if all initial values are zero for a row.
     self.layer.weight.data = initial_values
 
   def apply_sparse_filter_uniuqe(self, encoding):
