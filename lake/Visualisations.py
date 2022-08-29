@@ -9,6 +9,17 @@ import collections
 import seaborn as sns
 import pandas as pd
 
+COMPONENT_NAME_MAP = {
+  "dg": "DG",
+  "ca3": "CA3",
+  "pr": "EC:CA3 (Err)",
+  "ec_ca3": "EC:CA3 (Hebb)",
+  "ca3_ca1": "CA3:CA1",
+  "ca1_enc": "CA1",
+  "ca1_dec": "ECout",
+  "recon_pair": "Reconstruction"
+}
+
 class HeatmapPlotter:
     def __init__(self, path, component):
         self.path = path
@@ -41,7 +52,7 @@ class HeatmapPlotter:
             r_heatmap = sns.heatmap(data, xticklabels=labels, yticklabels=labels, cmap="RdYlBu_r",
                                     vmin=-0.1, vmax=0.6, ax=ax)
 
-        ax.set_title(self.component)
+        ax.set_title(COMPONENT_NAME_MAP[self.component])
         figure = r_heatmap.get_figure()
         figure.savefig(os.path.join(self.path, self.component + '.png'), dpi=300)
         plt.close()
@@ -141,30 +152,3 @@ class FrequencyPlotter:
         plt.grid(axis='y')
         plt.savefig(os.path.join(self.path, 'frequency_' + self.seed_batch + '.png'), dpi=300)
         plt.close()
-
-# Note: this ensures that following code does not run when this file imported.
-# Instead, the code will only run when the script is executed directly.
-if __name__ == '__main__':
-
-    import seaborn as sns
-    import pandas as pd
-    #experiment = 'associative_inference'
-    experiment = 'pairs_structure'
-    #experiment = 'community_structure'
-    #type = 'recurrence'
-    type = 'statistical'
-    #type = 'episodic'
-    #type = 'static'20220227-131231
-    date = '20220228-133812'
-    components = ["dg", "ca3", "pr", "ca3_ca1", "ca1_enc", "ca1_dec", "recon_pair"]
-    #components = ["dg", "ca3", "ec_ca3", "ca3_ca1", "ca1_enc", "ca1_dec", "recon_pair"]
-    path = '/Users/karina/PycharmProjects/pt-aha/lake/runs/'
-
-    bars = BarPlotter(os.path.join(path, experiment, type, date, 'predictions'), components)
-    bars.create_bar()
-
-    for a in components:
-                heatmap_initial = HeatmapPlotter(os.path.join(path, experiment, type, date, 'predictions'), "pearson_early_" + a)
-                heatmap_settled = HeatmapPlotter(os.path.join(path, experiment, type, date, 'predictions'), "pearson_late_" + a)
-                heatmap_initial.create_heatmap()
-                heatmap_settled.create_heatmap()

@@ -4,21 +4,25 @@ import json
 import argparse
 import logging
 import utils
-import torch
-import torch.nn
-import numpy as np
 import datetime
 import glob
-from scipy import stats
+
+import torch
+import torch.nn
+from torchvision import transforms
 from torch.utils.tensorboard import SummaryWriter
+
+import numpy as np
+from scipy import stats
+
 from cls_module.cls import CLS
+
 from datasets.sequence_generator import SequenceGenerator, SequenceGeneratorGraph, SequenceGeneratorTriads
 from datasets.omniglot_one_shot_dataset import OmniglotTransformation
 from datasets.omniglot_per_alphabet_dataset import OmniglotAlphabet
 from embeddings import Correlations, Overlap
 from Visualisations import HeatmapPlotter, BarPlotter
 from Visualisations import FrequencyPlotter
-from torchvision import transforms
 from oneshot_metrics import OneshotMetrics
 
 hebbian = False
@@ -500,7 +504,7 @@ def main():
     pearson_r_late_test = {a: pearson_r_test[a][2:pearson_r_test[a].shape[0] + 1:2] for a in
                                  pearson_r_test}
 
-
+    # Visualisations
     for a in pearson_r_early_test.keys():
         with open(main_summary_dir + '/pearson_early_test_' + a + '.csv',
                   'w', encoding='UTF8') as f:
