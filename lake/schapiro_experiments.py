@@ -25,9 +25,6 @@ from Visualisations import HeatmapPlotter, BarPlotter
 from Visualisations import FrequencyPlotter
 from oneshot_metrics import OneshotMetrics
 
-hebbian = False
-
-
 LOG_EVERY = 20
 LOG_EVERY_EVAL = 1
 VAL_EVERY = 2
@@ -38,17 +35,9 @@ VAL_SPLIT = 0.175
 
 def main():
     parser = argparse.ArgumentParser(description='Pair structure. Replicate of Schapiro')
-
-    if hebbian:
-        parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_Schapiro_hebb.json',
-                        help='Configuration file for experiments.')
-    else:
-        parser.add_argument('-c', '--config', nargs="?", type=str, default='./definitions/aha_config_Schapiro.json',
-                        help='Configuration file for experiments.')
-
+    parser.add_argument('-c', '--config', nargs="?", type=str, help='Configuration file for experiments.')
     parser.add_argument('-l', '--logging', nargs="?", type=str, default='warning',
                         help='Logging level.')
-
     args = parser.parse_args()
 
     logging_level = getattr(logging, args.logging.upper(), None)
@@ -316,7 +305,7 @@ def main():
                                                           paired_inputs=study_paired_data)
                         study_train_loss = study_train_losses['stm']['memory']['loss']
 
-                        if hebbian:
+                        if config.get('hebbian_perforant'):
                             print('Losses batch {}, ite {}: \t EC_CA3:{:.6f}\
                              \t ca3_ca1: {:.6f}'.format(idx, step, study_train_loss['ec_ca3'].item(),
                                                         study_train_loss['ca3_ca1'].item()))
@@ -433,7 +422,7 @@ def main():
                                                         secondary_feature, secondary_label,
                                                         comparison_type=comparison_type)
 
-                        if hebbian:
+                        if config.get('hebbian_perforant'):
                             stm_feature = 'stm_ca3_cue'
                         else:
                             stm_feature = 'stm_pr'
