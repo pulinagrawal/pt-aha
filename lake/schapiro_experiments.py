@@ -44,6 +44,7 @@ def main():
     logging.basicConfig(level=logging_level)
 
     with open(args.config) as config_file:
+        print('loading config', config_file)
         config = json.load(config_file)
 
     seed_ltm = config['seeds']
@@ -305,7 +306,7 @@ def main():
                                                           paired_inputs=study_paired_data)
                         study_train_loss = study_train_losses['stm']['memory']['loss']
 
-                        if config.get('hebbian_perforant'):
+                        if config.get('stm').get('hebbian_perforant'):
                             print('Losses batch {}, ite {}: \t EC_CA3:{:.6f}\
                              \t ca3_ca1: {:.6f}'.format(idx, step, study_train_loss['ec_ca3'].item(),
                                                         study_train_loss['ca3_ca1'].item()))
@@ -375,7 +376,7 @@ def main():
                                     recall_outputs_flat = recall_outputs_flat[0:characters].cpu()
                                     pearson_r = [[stats.pearsonr(a, b)[0] for a in recall_outputs_flat] for b in
                                                  recall_outputs_flat]
-                                    pearson_r = torch.tensor(pearson_r)
+                                    pearson_r = torch.tensor(pearson_r, dtype=torch.float32)
                                     pearson_r_tensor[component] = torch.cat((pearson_r_tensor[component], pearson_r[None, :, :]), 0)
 
                                     if experiment == 'pairs_structure':
@@ -422,7 +423,7 @@ def main():
                                                         secondary_feature, secondary_label,
                                                         comparison_type=comparison_type)
 
-                        if config.get('hebbian_perforant'):
+                        if config.get('stm').get('hebbian_perforant'):
                             stm_feature = 'stm_ca3_cue'
                         else:
                             stm_feature = 'stm_pr'
