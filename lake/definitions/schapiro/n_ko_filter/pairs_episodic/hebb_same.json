@@ -1,4 +1,5 @@
 {
+  "pretrained_model_path": "./runs/pretrained-vgg/",
   "experiment_name": "pairs_structure",
   "learning_type": "episodic",
   "communities": 3,
@@ -18,7 +19,7 @@
   "writer_idx_study": 3,
   "writer_idx_validation": 7,
   "writer_idx_recall": 3,
-  "pretrain_epochs": 4,
+  "pretrain_epochs": 10,
   "pretrain_batch_size": 150,
   "image_resize_factor": 0.5,
   "image_shape": [1, 1, 52, 52],

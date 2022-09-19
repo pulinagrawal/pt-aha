@@ -1,5 +1,5 @@
 {
-  "pretrained_model_path": "./runs/associative_inference/static/20220131-140733/1150/",
+  "pretrained_model_path": "./runs/pretrained-vgg/",
   "experiment_name": "pairs_structure",
   "learning_type": "episodic",
   "communities": 3,
