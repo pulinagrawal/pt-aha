@@ -1,5 +1,5 @@
 {
-  "pretrained_model_path": "./runs/associative_inference/static/20220131-140733/1150/",
+  "pretrained_model_path": "./runs/pretrained-vgg/",
   "experiment_name": "associative_inference",
   "learning_type": "static",
   "communities": 3,
@@ -7,19 +7,19 @@
   "sequence_length": 60,
   "study_batch_size": 60,
   "overlap_option": "add",
-  "seeds": 2,
+  "seeds": 20,
   "train_epochs": 1,
   "activation_coefficient": 1,
   "late_response_steps": 150,
   "early_response_step": 120,
   "own_alphabet": true,
-  "alphabet": "N_Ko_filter_2",
+  "alphabet": "N_Ko_filter",
   "variation_recall": false,
   "variation_training": false,
   "writer_idx_study": 1,
   "writer_idx_validation": 7,
   "writer_idx_recall": 1,
-  "pretrain_epochs": 5,
+  "pretrain_epochs": 10,
   "pretrain_batch_size": 150,
   "image_resize_factor": 0.5,
   "image_shape": [1, 1, 52, 52],
@@ -33,12 +33,11 @@
     "ca1_dec",
     "recon_pair"
   ],
-  "ltm_type": "vc",
+  "ltm_type": "vgg",
   "stm_type": "aha",
   "metrics": {
-    "prefixes": ["ltm_sf", "ca3", "ca3_cue_rf", "ec_out", "ec_out_rf"],
+    "prefixes": ["ca3", "ca3_cue_rf", "ec_out", "ec_out_rf"],
     "primary_feature_names": [
-      "study.ltm_vc",
       "study.stm_ca3",
       "recall.stm_ca3_cue",
       "study.stm_recon_ec",
@@ -46,13 +45,11 @@
     ],
     "primary_label_names": [
       "study.labels",
-      "study.labels",
       "recall.labels",
       "study.labels",
       "recall.labels"
     ],
     "secondary_feature_names": [
-      "recall.ltm_vc",
       "recall.stm_ca3",
       "study.stm_ca3_cue",
       "recall.stm_recon_ec",
@@ -60,18 +57,11 @@
     ],
     "secondary_label_names": [
       "recall.labels",
-      "recall.labels",
       "study.labels",
       "recall.labels",
       "study.labels"
     ],
-    "comparison_types": [
-      "match_mse",
-      "match_mse",
-      "match_mse",
-      "match_mse",
-      "match_mse"
-    ]
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
   },
   "decoder": {
     "learning_rate": 0.01,
@@ -83,22 +73,18 @@
   },
   "ltm": {
     "learning_rate": 0.001,
-    "filters": 121,
-    "kernel_size": 10,
-    "stride": 5,
+    "weight_decay": 0.0001,
+    "num_stages": 2,
+    "num_filters": 48,
+    "use_channel_wise_attention": true,
+
+    "kernel_size": 3,
+    "stride": 1,
     "eval_stride": 1,
-    "encoder_padding": "same",
-    "decoder_padding": "same",
-    "encoder_nonlinearity": "none",
-    "decoder_nonlinearity": "none",
-    "use_bias": true,
-    "use_tied_weights": true,
-    "use_lifetime_sparsity": true,
-    "sparsity": 4,
-    "sparsity_output_factor": 1.0,
-    "output_pool_size": 4,
-    "output_pool_stride": 4,
-    "output_norm_per_sample": true
+
+    "classifier": {
+      "output_units": [2000]
+    }
   },
   "stm": {
     "msp_type": "ca1",

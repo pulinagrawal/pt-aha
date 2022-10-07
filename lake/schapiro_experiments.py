@@ -520,8 +520,8 @@ def main():
             writer_file.writerows(pearson_r_late[a].numpy())
 
     for a in pearson_r_early.keys():
-         heatmap_early = HeatmapPlotter(main_summary_dir, "pearson_early_" + a)
-         heatmap_late = HeatmapPlotter(main_summary_dir, "pearson_late_" + a)
+         heatmap_early = HeatmapPlotter(main_summary_dir, a, "pearson_early_" + a)
+         heatmap_late = HeatmapPlotter(main_summary_dir, a, "pearson_late_" + a)
          heatmap_early.create_heatmap()
          heatmap_late.create_heatmap()
 

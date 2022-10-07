@@ -21,14 +21,15 @@ COMPONENT_NAME_MAP = {
 }
 
 class HeatmapPlotter:
-    def __init__(self, path, component):
+    def __init__(self, path, component, label):
         self.path = path
         self.component = component
+        self.label = label
         self.community = "community" in path
 
     # Function to load results in Runs
     def _load_predictions_pearson(self):
-        name = self.component + '.csv$'
+        name = self.label + '.csv$'
         response = [file for file in os.listdir(self.path) if re.match(name, file)]
         with open(os.path.join(self.path, response[0]), newline='') as f:
             reader = csv.reader(f)
@@ -54,7 +55,7 @@ class HeatmapPlotter:
 
         ax.set_title(COMPONENT_NAME_MAP[self.component])
         figure = r_heatmap.get_figure()
-        figure.savefig(os.path.join(self.path, self.component + '.png'), dpi=300)
+        figure.savefig(os.path.join(self.path, self.label + '.png'), dpi=300)
         plt.close()
 
 
