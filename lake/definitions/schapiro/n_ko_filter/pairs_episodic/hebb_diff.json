@@ -57,18 +57,11 @@
     ],
     "secondary_label_names": [
       "recall.labels",
-      "recall.labels",
       "study.labels",
       "recall.labels",
       "study.labels"
     ],
-    "comparison_types": [
-      "match_mse",
-      "match_mse",
-      "match_mse",
-      "match_mse",
-      "match_mse"
-    ]
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
   },
   "decoder": {
     "learning_rate": 0.01,
