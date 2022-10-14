@@ -50,7 +50,6 @@
       "recall.labels"
     ],
     "secondary_feature_names": [
-      "recall.ltm_vgg",
       "recall.stm_ca3",
       "study.stm_ca3_cue",
       "recall.stm_recon_ec",
@@ -58,18 +57,11 @@
     ],
     "secondary_label_names": [
       "recall.labels",
-      "recall.labels",
       "study.labels",
       "recall.labels",
       "study.labels"
     ],
-    "comparison_types": [
-      "match_mse",
-      "match_mse",
-      "match_mse",
-      "match_mse",
-      "match_mse"
-    ]
+    "comparison_types": ["match_mse", "match_mse", "match_mse", "match_mse"]
   },
   "decoder": {
     "learning_rate": 0.01,
